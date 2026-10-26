@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: os-service
+  namespace: oficina-ms
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: os-service
+
+  template:
+    metadata:
+      labels:
+        app: os-service
+
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+
+        - name: os-service
+
+          image: IMAGE_NAME
+
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8080
+              name: http
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          readinessProbe:
+
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+
+            initialDelaySeconds: 60
+            periodSeconds: 30
+
+          livenessProbe:
+
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+
+            initialDelaySeconds: 90
+            periodSeconds: 30
