@@ -2,18 +2,32 @@ spring:
   application:
     name: os-service
 
+  cloud:
+    openfeign:
+      client:
+        config:
+          execucao-service:
+            url: http://localhost:8080
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/os_service}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: false
     open-in-view: false
+
 
 aws:
   region: ${AWS_REGION:us-east-1}
+
+jwt:
+  secret: ${JWT_SECRET:sua-chave-secreta-com-minimo-32-caracteres}
+  expiration: 86400000 # 24h em ms
 
 management:
   endpoints:
@@ -23,3 +37,8 @@ management:
   endpoint:
     health:
       show-details: always
+
+execucao:
+  service:
+    url: http://localhost:8080
+

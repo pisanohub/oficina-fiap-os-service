@@ -8,3 +8,9 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+  flyway:
+    enabled: false
+
+jwt:
+  secret: test-secret-key-for-unit-tests-only-32chars
+  expiration: 86400000
