@@ -13,6 +13,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -59,11 +61,6 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
             throw new BusinessException("Veículo não pertence ao cliente informado");
         }
 
-        Servico servico = null;
-        if (dto.getServicoId() != null) {
-            servico = this.salvarServicoHistorico(dto.getServicoId());
-        }
-
         OrdemDeServico ordem = OrdemDeServico.builder()
                 .numero(gerarNumero())
                 .veiculo(veiculo)
@@ -81,32 +78,22 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         if (dto.getItensEstoqueCadastro() == null || dto.getItensEstoqueCadastro().isEmpty())
             return toDTO(ordemSalva);
 
-        if (servico == null) {
-            throw new BusinessException("OS Cadastrada, porém não é possivel adicionar itens sem um serviço atrelado");
-        }
-        AdicionarItemDTO itemDTO = this.getAdicionarItemDTO(dto, servico);
+        AdicionarItemDTO itemDTO = this.getAdicionarItemDTO(dto);
 
         return this.adicionarItens(ordemSalva.getId(), itemDTO);
     }
 
-    public AdicionarItemDTO getAdicionarItemDTO(CriarOrdemDTO osDto, Servico servico) {
-        Long servicoId = servico.getId();
+    public AdicionarItemDTO getAdicionarItemDTO(CriarOrdemDTO osDto) {
 
         List<AdicionarItemDTO.Item> itens = osDto.getItensEstoqueCadastro().stream()
                 .map(itemCad -> AdicionarItemDTO.Item.builder()
-                        .servicoId(servicoId)
+                        .servicoId(osDto.getServicoId())
                         .itemEstoqueId(itemCad.getItemEstoqueId())
                         .quantidade(itemCad.getQuantidade())
                         .build())
                 .toList();
 
         return new AdicionarItemDTO(itens);
-    }
-
-    private Servico salvarServicoHistorico(Long id){
-        ServicoResponseDTO dto = this.getServico(id);
-        Servico servico = new Servico(dto);
-        return servicoRepository.save(servico);
     }
 
 
@@ -225,19 +212,20 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         }
 
         for (AdicionarItemDTO.Item itemDTO : dto.getItens()) {
-            Servico servico = new Servico(this.getServico(itemDTO.getServicoId()));
+            Servico servico = this.getServico(itemDTO.getServicoId());
 
-            Item itemEstoque = new Item(this.getItemEstoque(itemDTO.getItemEstoqueId()));
+            ItemEstoqueResponseDTO itemEstoque = getItemEstoque(itemDTO.getItemEstoqueId());
 
-            BigDecimal precoUnitario = itemEstoque.getPrecoUnitario();
-            BigDecimal subtotal = itemEstoque.calcularCustoTotal(itemDTO.getQuantidade());
+            BigDecimal precoUnitario = itemEstoque.precoUnitario();
+            BigDecimal subtotal = precoUnitario.multiply(BigDecimal.valueOf(itemDTO.getQuantidade()));
 
             /// itemEstoque.reduzirEstoque(itemDTO.getQuantidade()); ---> CHAMAR FILA ESTOQUE
 
             ItemOS item = ItemOS.builder()
                     .ordemDeServico(ordem)
                     .servico(servico)
-                    .item(itemEstoque)
+                    .nomeItem(itemEstoque.nome())
+                    .idOrigemItem(itemEstoque.id())
                     .quantidade(itemDTO.getQuantidade())
                     .precoUnitario(precoUnitario)
                     .subtotal(subtotal)
@@ -276,9 +264,27 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         return toDTO(ordemRepository.save(ordem));
     }
 
-    private ServicoResponseDTO getServico(Long idServico) {
+    private Servico getServico(Long idServico) {
         try {
-            return execucaoClient.buscarServicoPorId(idServico);
+            ServicoResponseDTO dto = execucaoClient.buscarServicoPorId(idServico);
+
+            Servico servico = new Servico(dto);
+
+            // Configura o Example para ignorar o ID (que é nulo ou gerado) e propriedades nulas
+            ExampleMatcher matcher = ExampleMatcher.matching()
+                    .withIgnorePaths("id") // Ignora o ID na comparação
+                    .withIgnoreCase();      // Opcional: ignora maiúsculas/minúsculas para strings
+
+            Example<Servico> example = Example.of(servico, matcher);
+
+            // Executa a busca
+            List<Servico> resultados = servicoRepository.findAll(example);
+
+            if (!resultados.isEmpty())
+                return resultados.getFirst();
+
+            return servicoRepository.save(servico);
+
         } catch (FeignException.NotFound e) {
             throw new NoSuchElementException("Serviço não encontrado: " + idServico);
         }
@@ -424,8 +430,8 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .id(item.getId())
                 .servicoId(item.getServico().getIdOrigem())
                 .servicoNome(item.getServico().getNome())
-                .itemEstoqueId(item.getItem().getId())
-                .itemEstoqueNome(item.getItem().getNome())
+                .itemEstoqueId(item.getIdOrigemItem())
+                .itemEstoqueNome(item.getNomeItem())
                 .quantidade(item.getQuantidade())
                 .precoUnitario(item.getPrecoUnitario())
                 .subtotal(item.getSubtotal())

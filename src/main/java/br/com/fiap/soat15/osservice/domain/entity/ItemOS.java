@@ -24,11 +24,7 @@ public class ItemOS {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "servico_id", nullable = false)
-    private Servico servico;    
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "item_estoque_id", nullable = false)
-    private Item item;
+    private Servico servico;
 
     @Column(nullable = false)
     private Integer quantidade;
@@ -38,4 +34,10 @@ public class ItemOS {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
+
+    @Column()
+    private String nomeItem;
+
+    @Column()
+    private Long idOrigemItem;
 }
