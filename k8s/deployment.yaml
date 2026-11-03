@@ -32,6 +32,14 @@ spec:
             - containerPort: 8080
               name: http
 
+          envFrom:
+
+            - configMapRef:
+                name: os-service-config
+
+            - secretRef:
+                name: os-service-secret
+
           resources:
             requests:
               memory: "256Mi"
