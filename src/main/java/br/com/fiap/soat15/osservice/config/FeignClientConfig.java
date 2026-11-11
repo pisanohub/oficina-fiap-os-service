@@ -1,5 +1,6 @@
 package br.com.fiap.soat15.osservice.config;
 
+import feign.Logger;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,5 +33,11 @@ public class FeignClientConfig {
                 }
             }
         };
+    }
+
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        // FULL faz o Feign logar headers, corpo e metadados completos da requisição e resposta
+        return Logger.Level.FULL;
     }
 }

@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Table(name = "TB_ORDENS_SERVICO")
@@ -25,7 +24,7 @@ public class OrdemDeServico {
     @Column(nullable = false, unique = true, length = 20)
     private String numero;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @JoinColumn(name = "veiculo_id", nullable = false)
     private Veiculo veiculo;
 
@@ -59,11 +58,21 @@ public class OrdemDeServico {
     @Builder.Default
     private List<ItemOS> itens = new ArrayList<>();
 
-    @Column(name = "saga_id")
-    private UUID sagaId;
+    @Column()
+    private String sagaId;
+
+    @Column()
+    private String orcamentoId;
+
+    @Column()
+    private String pagamentoId;
 
     @Version
     private Long version;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_saga", nullable = false)
+    private StatusSaga statusSaga;
 
 //    @OneToMany(mappedBy = "ordemDeServico", cascade = CascadeType.ALL, orphanRemoval = true)
 //    @OrderBy("dataHora ASC")

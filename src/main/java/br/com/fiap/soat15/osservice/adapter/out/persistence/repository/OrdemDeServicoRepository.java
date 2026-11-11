@@ -37,4 +37,8 @@ public interface OrdemDeServicoRepository extends JpaRepository<OrdemDeServico, 
                 os.dataAbertura ASC
             """)
     List<OrdemDeServico> findAtivasOrdenadasPorPrioridade(@Param("statusExcluidos") List<StatusOS> statusExcluidos);
+
+    List<OrdemDeServico> findByVeiculoClienteIdAndStatus(Long clientId, StatusOS statusOS);
+
+    boolean existsByIdAndStatus(Long id, StatusOS statusOS);
 }

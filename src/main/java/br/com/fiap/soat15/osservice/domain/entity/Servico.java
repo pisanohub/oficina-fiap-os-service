@@ -1,6 +1,6 @@
 package br.com.fiap.soat15.osservice.domain.entity;
 
-import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.ServicoResponseDTO;
+import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.CatalogoResponseDTO;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -15,12 +15,12 @@ import java.math.BigDecimal;
 @Builder
 public class Servico {
 
-    public Servico(ServicoResponseDTO servicoDTO){
-        this.idOrigem = servicoDTO.id();
-        this.nome = servicoDTO.nome();
-        this.descricao = servicoDTO.descricao();
-        this.preco = servicoDTO.preco();
-        this.tempoEstimadoMinutos = servicoDTO.tempoEstimadoMinutos();
+    public Servico(CatalogoResponseDTO catalogoDTO){
+        this.idOrigem = catalogoDTO.itemId();
+        this.nome = catalogoDTO.nome();
+        this.descricao = catalogoDTO.descricao();
+        this.preco = catalogoDTO.precoUnitario();
+        this.tempoEstimadoMinutos = catalogoDTO.tempoEstimadoMinutos();
     }
 
     @Id
@@ -28,7 +28,7 @@ public class Servico {
     private Long id;
     
     @Column(nullable = false)
-    private Long idOrigem;
+    private String idOrigem;
 
     @Column(nullable = false, unique = true, length = 100)
     private String nome;

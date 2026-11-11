@@ -1,6 +1,9 @@
 package br.com.fiap.soat15.osservice.adapter.in.web;
 
+import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.SagaHistoricoRepository;
 import br.com.fiap.soat15.osservice.application.dto.*;
+import br.com.fiap.soat15.osservice.domain.entity.SagaHistorico;
+import br.com.fiap.soat15.osservice.domain.entity.StatusOrcamento;
 import br.com.fiap.soat15.osservice.domain.service.OrdemDeServicoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -25,6 +28,7 @@ import java.util.List;
 public class OrdemDeServicoController {
 
     private final OrdemDeServicoService ordemService;
+    private final SagaHistoricoRepository historicoRepository;
 
     @PostMapping
     @Operation(summary = "Abrir nova ordem de serviço")
@@ -35,6 +39,40 @@ public class OrdemDeServicoController {
     })
     public ResponseEntity<OrdemDeServicoDTO> criarOrdem(@Valid @RequestBody CriarOrdemDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ordemService.criarOrdem(dto));
+    }
+
+    @PostMapping("/{id}/orcamento")
+    @Operation(summary = "Solicitar orçamento para uma ordem de serviço")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Orçamento solicitado"),
+            @ApiResponse(responseCode = "404", description = "OS não encontrada")
+    })
+    public ResponseEntity<OrdemDeServicoDTO> solicitarOrcamento(@PathVariable Long id){
+        return ResponseEntity.ok(ordemService.solicitarOrcamento(id));
+    }
+
+    @GetMapping("/{clientId}/orcamentos")
+    @Operation(summary = "Listar todas as ordens de serviço com orçamento aberto de um cliente")
+    public ResponseEntity<List<OrdemDeServicoDTO>> listarOrcamentos(@PathVariable Long clientId) {
+        return ResponseEntity.ok(ordemService.listarOrcamentosAbertosPorCliente(clientId));
+    }
+
+    @PostMapping("/{id}/aprovar-orcamento")
+    @Operation(summary = "Aprovar ou rejeitar um orçamento")
+    public ResponseEntity<OrdemDeServicoDTO> aprovarOrcamento(@PathVariable Long id, @RequestHeader("status-orcamento") StatusOrcamento statusOrcamento) {
+        return ResponseEntity.ok(ordemService.aprovarOrcamento(id, statusOrcamento));
+    }
+
+    @GetMapping("/{clientId}/concluidas")
+    @Operation(summary = "Listar todas as ordens de serviço concluidas de um cliente")
+    public ResponseEntity<List<OrdemDeServicoDTO>> listarOsConcluidasPorCliente(@PathVariable Long clientId) {
+        return ResponseEntity.ok(ordemService.listarOsConcluidasPorCliente(clientId));
+    }
+
+    @PostMapping("/{id}/finalizar-entrega")
+    @Operation(summary = "Finaliza uma OS com status ENTREGUE")
+    public ResponseEntity<OrdemDeServicoDTO> finalizarOsEntregue(@PathVariable Long id) {
+        return ResponseEntity.ok(ordemService.finalizarOsEntregue(id));
     }
 
     @GetMapping
@@ -63,18 +101,18 @@ public class OrdemDeServicoController {
         return ResponseEntity.ok(ordemService.listarOrdensPorCliente(clienteId));
     }
 
-    @PatchMapping("/{id}/status")
-    @Operation(summary = "Avançar status da ordem de serviço")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Status atualizado com sucesso"),
-            @ApiResponse(responseCode = "400", description = "Transição de status inválida"),
-            @ApiResponse(responseCode = "404", description = "OS não encontrada")
-    })
-    public ResponseEntity<OrdemDeServicoDTO> avancarStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody AvancarStatusDTO dto) {
-        return ResponseEntity.ok(ordemService.avancarStatus(id, dto));
-    }
+//    @PatchMapping("/{id}/status")
+//    @Operation(summary = "Avançar status da ordem de serviço")
+//    @ApiResponses({
+//            @ApiResponse(responseCode = "200", description = "Status atualizado com sucesso"),
+//            @ApiResponse(responseCode = "400", description = "Transição de status inválida"),
+//            @ApiResponse(responseCode = "404", description = "OS não encontrada")
+//    })
+//    public ResponseEntity<OrdemDeServicoDTO> avancarStatus(
+//            @PathVariable Long id,
+//            @Valid @RequestBody AvancarStatusDTO dto) {
+//        return ResponseEntity.ok(ordemService.avancarStatus(id, dto));
+//    }
 
     @PostMapping("/{id}/itens")
     @Operation(summary = "Adicionar um ou mais serviços à ordem de serviço")
@@ -119,4 +157,12 @@ public class OrdemDeServicoController {
              @PathVariable("dataFinal") LocalDate dataFinal) {
          return ResponseEntity.ok(ordemService.listarTempoMedioPorPeriodo(dataInicial, dataFinal));
      }
+
+    @GetMapping("/{sagaId}/historico")
+    public ResponseEntity<List<SagaHistorico>> consultarHistoricoSaga(@PathVariable String sagaId) {
+        List<SagaHistorico> historico = historicoRepository.findBySagaIdOrderByOccurredAtAsc(sagaId);
+        return ResponseEntity.ok(historico);
+    }
+
+
 }

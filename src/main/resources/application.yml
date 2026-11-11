@@ -7,7 +7,22 @@ spring:
       client:
         config:
           execucao-service:
-            url: http://localhost:8080
+            url: ${OPEN_FEIGN_EXECUCAO_URL:http://localhost:8080}
+
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+      credentials:
+        access-key: ${AWS_ACCESS_KEY:test}
+        secret-key: ${AWS_SECRET_KEY:test}
+      sqs:
+        endpoint: ${AWS_SQS_ENPOINT:http://localhost:4566}
+        queue-not-found-strategy: CREATE
+        listener:
+          auto-startup: true
+          max-messages-per-poll: 10
+          poll-timeout: 10s
+
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/os_service}
@@ -21,9 +36,23 @@ spring:
     show-sql: false
     open-in-view: false
 
+#server:
+#  port: 9090
 
 aws:
-  region: ${AWS_REGION:us-east-1}
+  sqs:
+    create-queues: true
+    url:
+      in:
+        billing:
+          orcamento-respondido: orcamento-respondido
+          pagamento-confirmado: pagamento-confirmado
+        execucao: execucao-resultados
+      out:
+        billing:
+          gerar-orcamento: gerar-orcamento
+          processar-pagamento: processar-pagamento
+        execucao: execucao-comandos
 
 jwt:
   secret: ${JWT_SECRET:sua-chave-secreta-com-minimo-32-caracteres}
@@ -38,7 +67,9 @@ management:
     health:
       show-details: always
 
-execucao:
-  service:
-    url: http://localhost:8080
 
+#logging:
+#  level:
+#    br.com.fiap.soat15.osservice.adapter.out.gateway.ExecucaoClient: DEBUG
+#    io.awspring.cloud.sqs: DEBUG
+#    software.amazon.awssdk.services.sqs: DEBUG

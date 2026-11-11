@@ -19,7 +19,7 @@ public class CriarOrdemDTO {
     @NotNull(message = "veiculoId é obrigatório")
     private Long veiculoId;
 
-    private Long servicoId;
+    private String servicoId;
 
     private List<ItensEstoqueCadastro> itensEstoqueCadastro;
 

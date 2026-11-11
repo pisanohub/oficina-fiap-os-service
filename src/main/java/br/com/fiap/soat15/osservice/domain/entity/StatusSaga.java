@@ -1,0 +1,14 @@
+package br.com.fiap.soat15.osservice.domain.entity;
+
+public enum StatusSaga {
+    CRIADA,
+    ENVIADO_PARA_ORCAMENTO,
+    ENVIADO_PARA_PAGAMENTO,
+    ENVIADO_PARA_EXECUCAO,
+    EXECUCAO_AGENDADA,
+    EXECUCAO_REJEITADA,
+    FALHA_SAGA,
+    COMPENSADA,
+    AGUARDANDO_ENTREGA,
+    FINALIZADA
+}

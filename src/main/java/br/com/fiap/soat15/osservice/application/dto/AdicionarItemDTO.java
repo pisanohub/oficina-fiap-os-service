@@ -1,5 +1,6 @@
 package br.com.fiap.soat15.osservice.application.dto;
 
+import br.com.fiap.soat15.osservice.domain.entity.TipoItem;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -27,10 +28,13 @@ public class AdicionarItemDTO {
     public static class Item {
 
         @NotNull(message = "servicoId é obrigatório")
-        private Long servicoId;
+        private String servicoId;
 
         @NotNull(message = "itemEstoqueId é obrigatório")
-        private Long itemEstoqueId;
+        private String itemEstoqueId;
+
+        @NotNull(message = "tipoItem é obrigatório")
+        private TipoItem tipoItem;
 
         @NotNull(message = "Quantidade é obrigatória")
         @Min(value = 1, message = "Quantidade deve ser pelo menos 1")

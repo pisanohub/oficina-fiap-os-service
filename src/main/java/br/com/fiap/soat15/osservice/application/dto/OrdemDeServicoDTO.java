@@ -30,5 +30,5 @@ public class OrdemDeServicoDTO {
     private String observacoes;
     private BigDecimal valorTotal;
     private List<ItemOSDTO> itens;
-    private UUID sagaId;
+    private String sagaId;
 }

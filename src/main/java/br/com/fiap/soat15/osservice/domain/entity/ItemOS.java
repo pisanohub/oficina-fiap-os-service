@@ -39,5 +39,8 @@ public class ItemOS {
     private String nomeItem;
 
     @Column()
-    private Long idOrigemItem;
+    private String idOrigemItem;
+
+    @Column()
+    private TipoItem tipoItem;
 }

@@ -1,5 +1,6 @@
 package br.com.fiap.soat15.osservice.application.dto;
 
+import br.com.fiap.soat15.osservice.domain.entity.TipoItem;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -12,8 +13,9 @@ import java.math.BigDecimal;
 public class ItemOSDTO {
 
     private Long id;
-    private Long servicoId;
-    private Long itemEstoqueId;
+    private TipoItem tipoItem;
+    private String servicoId;
+    private String itemEstoqueId;
     private String itemEstoqueNome;
     private String servicoNome;
     private Integer quantidade;

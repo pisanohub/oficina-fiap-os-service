@@ -1,8 +1,7 @@
 package br.com.fiap.soat15.osservice.application.usecase;
 
 import br.com.fiap.soat15.osservice.adapter.out.gateway.ExecucaoClient;
-import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.ItemEstoqueResponseDTO;
-import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.ServicoResponseDTO;
+import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.CatalogoResponseDTO;
 import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.*;
 import br.com.fiap.soat15.osservice.application.dto.*;
 import br.com.fiap.soat15.osservice.domain.entity.*;
@@ -26,10 +25,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.nonNull;
 import static java.util.Optional.ofNullable;
@@ -47,6 +44,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
     private final ItemOSRepository itemOSRepository;
     private final ServicoRepository servicoRepository;
     private final MeterRegistry meterRegistry;
+    private final OrcamentoImpl billingService;
 
     @Autowired
     private final ExecucaoClient execucaoClient;
@@ -70,6 +68,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .descricaoProblema(dto.getDescricaoProblema())
                 .observacoes(dto.getObservacoes())
                 .valorTotal(BigDecimal.ZERO)
+                .statusSaga(StatusSaga.CRIADA)
                 .build();
 
         OrdemDeServico ordemSalva = ordemRepository.save(ordem);
@@ -89,11 +88,89 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .map(itemCad -> AdicionarItemDTO.Item.builder()
                         .servicoId(osDto.getServicoId())
                         .itemEstoqueId(itemCad.getItemEstoqueId())
+                        .tipoItem(itemCad.getTipoItem())
                         .quantidade(itemCad.getQuantidade())
                         .build())
                 .toList();
 
         return new AdicionarItemDTO(itens);
+    }
+
+    @Override
+    @Transactional()
+    public OrdemDeServicoDTO solicitarOrcamento(Long id) {
+        OrdemDeServico ordem = buscarEntidade(id);
+        Cliente cliente = ordem.getVeiculo().getCliente();
+
+        billingService.solicitarOrcamento(ordem, cliente.getId());
+
+        return toDTO(ordem);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrdemDeServicoDTO> listarOrcamentosAbertosPorCliente(Long clientId) {
+        if (!clienteRepository.existsById(clientId))
+            throw new NoSuchElementException("Cliente não encontrado: " + clientId);
+
+        return ordemRepository.findByVeiculoClienteIdAndStatus(clientId, StatusOS.AGUARDANDO_APROVACAO)
+                .stream().map(this::toDTO).toList();
+    }
+
+    @Override
+    @Transactional()
+    public OrdemDeServicoDTO aprovarOrcamento(Long id, StatusOrcamento statusOrcamento) {
+
+        if (!ordemRepository.existsByIdAndStatus(id, StatusOS.AGUARDANDO_APROVACAO))
+            throw new BusinessException("Não é possivel confirmar um orçamento da OS " + id + " antes de solicitar o orçamento");
+
+        OrdemDeServico ordem = buscarEntidade(id);
+        Cliente cliente = ordem.getVeiculo().getCliente();
+
+        AvancarStatusDTO dto;
+        if (statusOrcamento.equals(StatusOrcamento.APROVADO)) {
+            dto = AvancarStatusDTO.builder()
+                    .novoStatus(StatusOS.APROVADA)
+                    .observacoes("Orçamento aprovado pelo cliente")
+                    .statusSaga(StatusSaga.ENVIADO_PARA_PAGAMENTO)
+                    .build();
+
+            billingService.processarPagamento(ordem, cliente.getId());
+        } else {
+            dto = AvancarStatusDTO.builder()
+                    .novoStatus(StatusOS.CANCELADA)
+                    .observacoes("Orçamento rejeitado pelo cliente")
+                    .statusSaga(StatusSaga.COMPENSADA)
+                    .build();
+        }
+
+        return avancarStatusDto(id, dto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrdemDeServicoDTO> listarOsConcluidasPorCliente(Long clientId) {
+        if (!clienteRepository.existsById(clientId))
+            throw new NoSuchElementException("Cliente não encontrado: " + clientId);
+
+        return ordemRepository.findByVeiculoClienteIdAndStatus(clientId, StatusOS.CONCLUIDA)
+                .stream().map(this::toDTO).toList();
+    }
+
+    @Override
+    @Transactional()
+    public OrdemDeServicoDTO finalizarOsEntregue(Long id) {
+
+        if (!ordemRepository.existsByIdAndStatus(id, StatusOS.CONCLUIDA))
+            throw new BusinessException("Não é possivel finalizar a OS " + id + " fora so status CONCLUIDA");
+
+        AvancarStatusDTO dto = AvancarStatusDTO.builder()
+                .novoStatus(StatusOS.ENTREGUE)
+                .observacoes("Veiculo entregue ao cliente")
+                .statusSaga(StatusSaga.FINALIZADA)
+                .build();
+
+        return avancarStatusDto(id, dto);
     }
 
 
@@ -166,7 +243,13 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
 
     @Override
     @Transactional
-    public OrdemDeServicoDTO avancarStatus(Long id, AvancarStatusDTO dto) {
+    public OrdemDeServicoDTO avancarStatusDto(Long id, AvancarStatusDTO dto) {
+        return toDTO(this.avancarStatus(id, dto));
+    }
+
+    @Override
+    @Transactional
+    public OrdemDeServico avancarStatus(Long id, AvancarStatusDTO dto) {
         OrdemDeServico ordem = buscarEntidade(id);
         StatusOS statusAtual = ordem.getStatus();
         validarTransicao(ordem.getStatus(), dto.getNovoStatus());
@@ -177,9 +260,9 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         ordem.setStatus(dto.getNovoStatus());
         ordem.setDataUltimaMudancaStatus(momentoTransicao);
         executarAposCommit(() -> meterRegistry.counter(
-                    "oficina.ordens.transicoes.status",
-                    Tags.of("de", statusAtual.name(), "para", dto.getNovoStatus().name())
-            ).increment());
+                "oficina.ordens.transicoes.status",
+                Tags.of("de", statusAtual.name(), "para", dto.getNovoStatus().name())
+        ).increment());
 
         if (dto.getObservacoes() != null && !dto.getObservacoes().isBlank()) {
             ordem.setObservacoes(dto.getObservacoes());
@@ -198,13 +281,28 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
             ordem.setDataFechamento(momentoTransicao);
         }
 
-        return toDTO(ordemRepository.save(ordem));
+        if (dto.getTotal() != null)
+            ordem.setValorTotal(dto.getTotal());
+
+        if (dto.getStatusSaga() != null)
+            ordem.setStatusSaga(dto.getStatusSaga());
+
+        if (dto.getOrcamentoId() != null)
+            ordem.setOrcamentoId(dto.getOrcamentoId());
+
+        if (dto.getPagamentoId() != null)
+            ordem.setPagamentoId(dto.getPagamentoId());
+
+        return ordemRepository.save(ordem);
     }
 
     @Override
     @Transactional
     public OrdemDeServicoDTO adicionarItens(Long ordemId, AdicionarItemDTO dto) {
         OrdemDeServico ordem = buscarEntidade(ordemId);
+
+        this.validarTransicao(ordem.getStatus(), StatusOS.EM_DIAGNOSTICO);
+        ordem.setStatus(StatusOS.EM_DIAGNOSTICO);
 
         if (!STATUS_PERMITE_ITENS.contains(ordem.getStatus())) {
             throw new IllegalArgumentException(
@@ -214,28 +312,26 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         for (AdicionarItemDTO.Item itemDTO : dto.getItens()) {
             Servico servico = this.getServico(itemDTO.getServicoId());
 
-            ItemEstoqueResponseDTO itemEstoque = getItemEstoque(itemDTO.getItemEstoqueId());
+            CatalogoResponseDTO itemEstoque = getItemEstoque(itemDTO.getItemEstoqueId());
 
             BigDecimal precoUnitario = itemEstoque.precoUnitario();
             BigDecimal subtotal = precoUnitario.multiply(BigDecimal.valueOf(itemDTO.getQuantidade()));
-
-            /// itemEstoque.reduzirEstoque(itemDTO.getQuantidade()); ---> CHAMAR FILA ESTOQUE
 
             ItemOS item = ItemOS.builder()
                     .ordemDeServico(ordem)
                     .servico(servico)
                     .nomeItem(itemEstoque.nome())
-                    .idOrigemItem(itemEstoque.id())
+                    .idOrigemItem(itemEstoque.itemId())
                     .quantidade(itemDTO.getQuantidade())
                     .precoUnitario(precoUnitario)
                     .subtotal(subtotal)
+                    .tipoItem(TipoItem.PECA)
                     .build();
 
             ItemOS itemSalvo = itemOSRepository.save(item);
             ordem.getItens().add(itemSalvo);
         }
 
-        recalcularTotal(ordem);
         return toDTO(ordemRepository.save(ordem));
     }
 
@@ -254,29 +350,21 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .findFirst()
                 .orElseThrow(() -> new NoSuchElementException("Item não encontrado: " + itemId));
 
-//        Item itemEstoque = item.getItem();
-        /// itemEstoque.aumentarEstoque(item.getQuantidade()); ---- CHAMAR FILA ESTOQUE
-//        itemEstoqueRepository.save(itemEstoque);
-
         ordem.getItens().remove(item);
-        recalcularTotal(ordem);
 
         return toDTO(ordemRepository.save(ordem));
     }
 
-    private Servico getServico(Long idServico) {
+    private Servico getServico(String idServico) {
         try {
-            ServicoResponseDTO dto = execucaoClient.buscarServicoPorId(idServico);
-
+            CatalogoResponseDTO dto = execucaoClient.getItem(TipoItem.SERVICO, idServico);
             Servico servico = new Servico(dto);
 
             // Configura o Example para ignorar o ID (que é nulo ou gerado) e propriedades nulas
             ExampleMatcher matcher = ExampleMatcher.matching()
                     .withIgnorePaths("id") // Ignora o ID na comparação
                     .withIgnoreCase();      // Opcional: ignora maiúsculas/minúsculas para strings
-
             Example<Servico> example = Example.of(servico, matcher);
-
             // Executa a busca
             List<Servico> resultados = servicoRepository.findAll(example);
 
@@ -290,9 +378,9 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         }
     }
 
-    private ItemEstoqueResponseDTO getItemEstoque(Long idItem) {
+    private CatalogoResponseDTO getItemEstoque(String idItem) {
         try {
-            return execucaoClient.buscarItemPorId(idItem);
+            return execucaoClient.getItem(TipoItem.PECA, idItem);
         } catch (FeignException.NotFound e) {
             throw new NoSuchElementException("Item não encontrado: " + idItem);
         }
@@ -350,12 +438,6 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         }
     }
 
-    private void recalcularTotal(OrdemDeServico ordem) {
-        BigDecimal total = ordem.getItens().stream()
-                .map(ItemOS::getSubtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        ordem.setValorTotal(total);
-    }
 
     private void registrarTempoNoStatusAnterior(OrdemDeServico ordem, StatusOS statusAtual, LocalDateTime momentoTransicao) {
         LocalDateTime inicioStatus = ofNullable(ordem.getDataUltimaMudancaStatus()).orElse(ordem.getDataAbertura());
@@ -365,9 +447,9 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         }
 
         executarAposCommit(() -> meterRegistry.timer(
-                    "oficina.ordens.status.duracao",
-                    Tags.of("status", statusAtual.name())
-            ).record(tempoNoStatus));
+                "oficina.ordens.status.duracao",
+                Tags.of("status", statusAtual.name())
+        ).record(tempoNoStatus));
     }
 
     private void registrarTempoExecucao(OrdemDeServico ordem, LocalDateTime momentoFinalizacao) {
@@ -404,7 +486,13 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
     }
 
     private OrdemDeServicoDTO toDTO(OrdemDeServico ordem) {
-        List<ItemOSDTO> itensDTO = ordem.getItens().stream().map(this::toItemDTO).toList();
+
+        Set<Servico> servicos = ordem.getItens().stream()
+                .map(ItemOS::getServico)
+                .collect(Collectors.toSet());
+
+        List<ItemOSDTO> itensDTO = new ArrayList<>(ordem.getItens().stream().map(this::toItemDTO).toList());
+        itensDTO.addAll(servicos.stream().map(this::toServicoDTO).toList());
 
         return OrdemDeServicoDTO.builder()
                 .id(ordem.getId())
@@ -422,12 +510,14 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .observacoes(ordem.getObservacoes())
                 .valorTotal(ordem.getValorTotal())
                 .itens(itensDTO)
+                .sagaId(ordem.getSagaId())
                 .build();
     }
 
     private ItemOSDTO toItemDTO(ItemOS item) {
         return ItemOSDTO.builder()
                 .id(item.getId())
+                .tipoItem(TipoItem.PECA)
                 .servicoId(item.getServico().getIdOrigem())
                 .servicoNome(item.getServico().getNome())
                 .itemEstoqueId(item.getIdOrigemItem())
@@ -435,6 +525,21 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .quantidade(item.getQuantidade())
                 .precoUnitario(item.getPrecoUnitario())
                 .subtotal(item.getSubtotal())
+
+                .build();
+    }
+
+    private ItemOSDTO toServicoDTO(Servico servico) {
+        return ItemOSDTO.builder()
+                .id(servico.getId())
+                .tipoItem(TipoItem.SERVICO)
+                .servicoId(servico.getIdOrigem())
+                .servicoNome(servico.getNome())
+                .itemEstoqueId(servico.getIdOrigem())
+                .itemEstoqueNome(servico.getNome())
+                .quantidade(1)
+                .precoUnitario(servico.getPreco())
+                .subtotal(servico.getPreco())
                 .build();
     }
 }

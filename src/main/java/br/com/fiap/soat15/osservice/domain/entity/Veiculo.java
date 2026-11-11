@@ -28,7 +28,7 @@ public class Veiculo {
     @Column(nullable = false)
     private Integer ano;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @JoinColumn(name = "cliente_id", nullable = false)
     private Cliente cliente;
 }
