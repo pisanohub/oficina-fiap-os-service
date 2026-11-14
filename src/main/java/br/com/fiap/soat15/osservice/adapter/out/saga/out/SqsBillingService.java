@@ -1,7 +1,8 @@
 package br.com.fiap.soat15.osservice.adapter.out.saga.out;
 
 import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.BillingDto;
-import br.com.fiap.soat15.osservice.adapter.out.saga.dto.EnvelopeResponseSQS;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.CancelarOsDto;
+import br.com.fiap.soat15.osservice.application.usecase.UUIDv5;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -9,7 +10,6 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -38,8 +38,19 @@ public class SqsBillingService {
         }
     }
 
-    public void enviarComandoProcessarPagamento(BillingDto.ProcessarPagamentoRequest comando) {
+    public void enviarComandoProcessarPagamento(CancelarOsDto dto) {
         try {
+
+            BillingDto.ProcessarPagamentoRequest comando = new BillingDto.ProcessarPagamentoRequest(
+                    UUID.randomUUID().toString(),
+                    dto.getOrdemDeServico().getSagaId(),
+                    dto.getCausationId(),
+                    UUIDv5.gerarUuidV5PorId(dto.getOrdemDeServico().getId()).toString(),
+                    dto.getOrdemDeServico().getId(),
+                    dto.getOrdemDeServico().getVeiculo().getCliente().getId(),
+                    dto.getType()
+            );
+
             String jsonPayload = objectMapper.writeValueAsString(comando);
             enviarComando(jsonPayload, processarPagamentoUrl);
         } catch (Exception e) {
@@ -61,30 +72,4 @@ public class SqsBillingService {
         }
     }
 
-
-
-    public void enviarComandoCancelamento(String osId, String sagaId, String causationId) {
-        try {
-            EnvelopeResponseSQS envelopeResponseSQS = new EnvelopeResponseSQS(
-                    1,
-                    UUID.randomUUID().toString(),
-                    "cancelar-os-" + osId,
-                    "CancelarExecucao",
-                    sagaId,
-                    osId,
-                    causationId,
-                    Instant.now()
-            );
-
-            String jsonPayload = objectMapper.writeValueAsString(envelopeResponseSQS);
-
-            sqsClient.sendMessage(SendMessageRequest.builder()
-                    .queueUrl(gerarOrcamentoUrl)
-                    .messageBody(jsonPayload)
-                    .build());
-
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao enviar comando de cancelamento para o SQS", e);
-        }
-    }
 }

@@ -3,6 +3,9 @@ package br.com.fiap.soat15.osservice.application.usecase;
 import br.com.fiap.soat15.osservice.adapter.out.gateway.ExecucaoClient;
 import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.CatalogoResponseDTO;
 import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.*;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.CancelarOsDto;
+import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsBillingService;
+import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsExecucaoService;
 import br.com.fiap.soat15.osservice.application.dto.*;
 import br.com.fiap.soat15.osservice.domain.entity.*;
 import br.com.fiap.soat15.osservice.domain.exception.BusinessException;
@@ -45,12 +48,14 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
     private final ServicoRepository servicoRepository;
     private final MeterRegistry meterRegistry;
     private final OrcamentoImpl billingService;
+    private final SqsExecucaoService sqsExecucaoService;
+    private final SqsBillingService sqsBillingService;
 
     @Autowired
     private final ExecucaoClient execucaoClient;
 
     @Override
-    @Transactional
+    @Transactional()
     public OrdemDeServicoDTO criarOrdem(CriarOrdemDTO dto) {
         Veiculo veiculo = veiculoRepository.findById(dto.getVeiculoId())
                 .orElseThrow(() -> new NoSuchElementException("Veículo não encontrado: " + dto.getVeiculoId()));
@@ -97,6 +102,56 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
     }
 
     @Override
+    public void cancelarOrdem(Long id) {
+
+        OrdemDeServico ordem = buscarEntidade(id);
+
+        CancelarOsDto dto = new CancelarOsDto (ordem, "evento-cancelar-os-" + ordem.getId().toString());
+
+        StatusOS status = ordem.getStatus();
+        if (status.equals(StatusOS.ABERTA) || status.equals(StatusOS.EM_DIAGNOSTICO) || status.equals(StatusOS.AGUARDANDO_APROVACAO)) {
+            this.cancelarOS(dto);
+        }
+        else if (status.equals(StatusOS.APROVADA)) {
+            dto.setType("EstornarPagamento");
+            this.estornoPagamento(dto);
+        }
+        else if (status.equals(StatusOS.EM_EXECUCAO)) {
+            dto.setType("CancelarExecucao");
+            dto.setCausationId("Cancelamento-Solicitado-Pelo-Cliente");
+            this.solicitarCancelamentoDeExecucao(dto);
+            this.atualizarStatusSaga(id, StatusSaga.CANCELAMENTO_EXECUCAO_PENDENTE);
+        }
+        else {
+            throw new BusinessException("Nào foi possível processar a solicitação.");
+        }
+
+    }
+
+    private void solicitarCancelamentoDeExecucao(CancelarOsDto dto){
+        sqsExecucaoService.enviarComandoCancelamento(
+                dto.getOrdemDeServico().getId().toString(),
+                dto.getOrdemDeServico().getSagaId(),
+                dto.getCausationId(),
+                dto.getType()
+        );
+    }
+
+    private void estornoPagamento(CancelarOsDto dto) {
+        sqsBillingService.enviarComandoProcessarPagamento(dto);
+        this.cancelarOS(dto);
+    }
+
+    private void cancelarOS(CancelarOsDto dto) {
+        this.avancarStatus(
+                dto.getOrdemDeServico().getId(),
+                AvancarStatusDTO.builder()
+                        .novoStatus(StatusOS.CANCELADA)
+                        .statusSaga(StatusSaga.COMPENSADA)
+                        .build());
+    }
+
+    @Override
     @Transactional()
     public OrdemDeServicoDTO solicitarOrcamento(Long id) {
         OrdemDeServico ordem = buscarEntidade(id);
@@ -122,7 +177,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
     public OrdemDeServicoDTO aprovarOrcamento(Long id, StatusOrcamento statusOrcamento) {
 
         if (!ordemRepository.existsByIdAndStatus(id, StatusOS.AGUARDANDO_APROVACAO))
-            throw new BusinessException("Não é possivel confirmar um orçamento da OS " + id + " antes de solicitar o orçamento");
+            throw new BusinessException("Não é possivel aprovar o orçamento da OS " + id + " no status atual.");
 
         OrdemDeServico ordem = buscarEntidade(id);
         Cliente cliente = ordem.getVeiculo().getCliente();
@@ -131,7 +186,6 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         if (statusOrcamento.equals(StatusOrcamento.APROVADO)) {
             dto = AvancarStatusDTO.builder()
                     .novoStatus(StatusOS.APROVADA)
-                    .observacoes("Orçamento aprovado pelo cliente")
                     .statusSaga(StatusSaga.ENVIADO_PARA_PAGAMENTO)
                     .build();
 
@@ -139,7 +193,6 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         } else {
             dto = AvancarStatusDTO.builder()
                     .novoStatus(StatusOS.CANCELADA)
-                    .observacoes("Orçamento rejeitado pelo cliente")
                     .statusSaga(StatusSaga.COMPENSADA)
                     .build();
         }
@@ -166,7 +219,6 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
 
         AvancarStatusDTO dto = AvancarStatusDTO.builder()
                 .novoStatus(StatusOS.ENTREGUE)
-                .observacoes("Veiculo entregue ao cliente")
                 .statusSaga(StatusSaga.FINALIZADA)
                 .build();
 
@@ -296,18 +348,27 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         return ordemRepository.save(ordem);
     }
 
+    @Transactional
+    public void atualizarStatusSaga(Long id, StatusSaga novoStatus) {
+        OrdemDeServico os = ordemRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Ordem de serviço não encontrada"));
+
+        os.setStatusSaga(novoStatus);
+        ordemRepository.save(os);
+    }
+
     @Override
     @Transactional
     public OrdemDeServicoDTO adicionarItens(Long ordemId, AdicionarItemDTO dto) {
         OrdemDeServico ordem = buscarEntidade(ordemId);
 
-        this.validarTransicao(ordem.getStatus(), StatusOS.EM_DIAGNOSTICO);
-        ordem.setStatus(StatusOS.EM_DIAGNOSTICO);
-
         if (!STATUS_PERMITE_ITENS.contains(ordem.getStatus())) {
             throw new IllegalArgumentException(
                     "Não é possível adicionar itens à OS no status: " + ordem.getStatus());
         }
+
+        this.validarTransicao(ordem.getStatus(), StatusOS.EM_DIAGNOSTICO);
+        ordem.setStatus(StatusOS.EM_DIAGNOSTICO);
 
         for (AdicionarItemDTO.Item itemDTO : dto.getItens()) {
             Servico servico = this.getServico(itemDTO.getServicoId());
@@ -337,7 +398,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
 
     @Override
     @Transactional
-    public OrdemDeServicoDTO removerItem(Long ordemId, Long itemId) {
+    public OrdemDeServicoDTO removerItem(Long ordemId, String itemId) {
         OrdemDeServico ordem = buscarEntidade(ordemId);
 
         if (!STATUS_PERMITE_ITENS.contains(ordem.getStatus())) {
@@ -346,13 +407,19 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         }
 
         ItemOS item = ordem.getItens().stream()
-                .filter(i -> i.getId().equals(itemId))
+                .filter(i -> i.getIdOrigemItem().equals(itemId))
                 .findFirst()
                 .orElseThrow(() -> new NoSuchElementException("Item não encontrado: " + itemId));
 
         ordem.getItens().remove(item);
 
         return toDTO(ordemRepository.save(ordem));
+    }
+
+    @Override
+    public OrdemDeServico buscarEntidade(Long id) {
+        return ordemRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Ordem de serviço não encontrada: " + id));
     }
 
     private Servico getServico(String idServico) {
@@ -386,11 +453,6 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         }
     }
 
-    private OrdemDeServico buscarEntidade(Long id) {
-        return ordemRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Ordem de serviço não encontrada: " + id));
-    }
-
     private void validarTransicao(StatusOS atual, StatusOS novo) {
         if (STATUS_TERMINAIS.contains(atual)) {
             throw new BusinessException(
@@ -402,10 +464,13 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
             case EM_DIAGNOSTICO -> novo == StatusOS.AGUARDANDO_APROVACAO || novo == StatusOS.CANCELADA;
             case AGUARDANDO_APROVACAO -> novo == StatusOS.APROVADA || novo == StatusOS.CANCELADA;
             case APROVADA -> novo == StatusOS.EM_EXECUCAO || novo == StatusOS.CANCELADA;
-            case EM_EXECUCAO -> novo == StatusOS.CONCLUIDA;
+            case EM_EXECUCAO -> novo == StatusOS.CONCLUIDA || novo == StatusOS.CANCELADA;
             case CONCLUIDA -> novo == StatusOS.ENTREGUE;
             default -> false;
         };
+
+        if (atual.equals(novo))
+            valido = true;
 
         if (!valido) {
             throw new IllegalArgumentException(

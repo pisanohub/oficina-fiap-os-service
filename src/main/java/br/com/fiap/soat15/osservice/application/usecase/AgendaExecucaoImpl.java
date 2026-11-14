@@ -43,7 +43,6 @@ public class AgendaExecucaoImpl implements AgendaExecucaoService {
 
         OrdemDeServico os = osService.avancarStatus(osId, AvancarStatusDTO.builder()
                 .novoStatus(StatusOS.EM_EXECUCAO)
-                .observacoes("Pagamento aprovado com sucesso.")
                 .statusSaga(StatusSaga.EXECUCAO_AGENDADA)
                 .pagamentoId(pagamentoResponseDto.pagamentoId())
                 .build());

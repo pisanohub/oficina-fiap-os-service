@@ -5,14 +5,12 @@ import java.util.List;
 
 public class BillingDto {
 
-    public BillingDto(GerarOrcamentoRequest billingRequest) {
-    }
 
     // Objeto enviado para gerar o orçamento com base no snapshot do OS
     public record GerarOrcamentoRequest(
-            String messageId,   /// Excencial pois uso para validacao de duplicidade na fila / execucao duplicada
-            String sagaId,      /// Ideal para rastreabilidade
-            String causationId, /// Opcional
+            String messageId,
+            String sagaId,
+            String causationId,
             String comandoId,
             Long ordemId,
             Long clienteId,
@@ -29,12 +27,13 @@ public class BillingDto {
 
     // Resposta devolvida pelo Billing após persistir o orçamento[cite: 3]
     public record ProcessarPagamentoRequest(
-            String messageId,   /// Excencial pois uso para validacao de duplicidade na fila / execucao duplicada
-            String sagaId,      /// Ideal para rastreabilidade
-            String causationId, /// Opcional
+            String messageId,
+            String sagaId,
+            String causationId,
             String comandoId,
             Long ordemId,
-            Long clienteId
+            Long clienteId,
+            String type
     ) {}
 
 }

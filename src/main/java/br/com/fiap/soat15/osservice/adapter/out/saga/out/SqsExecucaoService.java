@@ -49,13 +49,13 @@ public class SqsExecucaoService {
         }
     }
 
-    public void enviarComandoCancelamento(String osId, String sagaId, String causationId) {
+    public void enviarComandoCancelamento(String osId, String sagaId, String causationId, String type) {
         try {
             EnvelopeResponseSQS envelopeResponseSQS = new EnvelopeResponseSQS(
                     1,
                     UUID.randomUUID().toString(),
                     "cancelar-os-" + osId,
-                    "CancelarExecucao",
+                    type,
                     sagaId,
                     osId,
                     causationId,

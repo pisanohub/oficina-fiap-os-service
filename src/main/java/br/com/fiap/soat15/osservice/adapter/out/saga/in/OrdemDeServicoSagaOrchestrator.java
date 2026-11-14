@@ -1,21 +1,19 @@
 package br.com.fiap.soat15.osservice.adapter.out.saga.in;
 
 import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.SagaHistoricoRepository;
-import br.com.fiap.soat15.osservice.adapter.out.saga.dto.BillingResponse;
-import br.com.fiap.soat15.osservice.adapter.out.saga.dto.EnvelopeResponseSQS;
-import br.com.fiap.soat15.osservice.adapter.out.saga.dto.ExecucaoResultadoEventDto;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.*;
+import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsBillingService;
 import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsExecucaoService;
 import br.com.fiap.soat15.osservice.application.dto.AvancarStatusDTO;
-import br.com.fiap.soat15.osservice.domain.entity.SagaHistorico;
-import br.com.fiap.soat15.osservice.domain.entity.StatusBilling;
-import br.com.fiap.soat15.osservice.domain.entity.StatusOS;
-import br.com.fiap.soat15.osservice.domain.entity.StatusSaga;
+import br.com.fiap.soat15.osservice.domain.entity.*;
+import br.com.fiap.soat15.osservice.domain.exception.BusinessException;
 import br.com.fiap.soat15.osservice.domain.service.AgendaExecucaoService;
 import br.com.fiap.soat15.osservice.domain.service.OrdemDeServicoService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
@@ -26,8 +24,7 @@ public class OrdemDeServicoSagaOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(OrdemDeServicoSagaOrchestrator.class);
 
     private final OrdemDeServicoService ordemService;
-    private final SqsExecucaoService sqsExecucaoService;
-    private final SagaHistoricoRepository sagaHistoricoRepository;
+    private final SqsBillingService sqsBillingService;
     private final AgendaExecucaoService agendaExecucaoService;
 
     public void processarRespostaExecucao(ExecucaoResultadoEventDto evento) {
@@ -42,7 +39,6 @@ public class OrdemDeServicoSagaOrchestrator {
                             .novoStatus(StatusOS.EM_EXECUCAO)
                             .build();
                     ordemService.avancarStatus(osId, dto);
-                    salvarHistorico(evento.envelopeResponseSQS());
                     logger.info("SAGA [Sucesso]: Peças reservadas e execução agendada para a OS {}", osId);
                 }
                 case "ExecucaoConcluida" -> {
@@ -51,18 +47,27 @@ public class OrdemDeServicoSagaOrchestrator {
                             .statusSaga(StatusSaga.AGUARDANDO_ENTREGA)
                             .build();
                     ordemService.avancarStatus(osId, dto);
-                    salvarHistorico(evento.envelopeResponseSQS());
                     logger.info("Trabalho concluído com sucesso na OS {}", osId);
                 }
                 case "ExecucaoRejeitada" -> {
-                    acionarCompensacao(evento);
+                    CompensacaoDto dto = new CompensacaoDto(evento.envelopeResponseSQS().osId(), evento.envelopeResponseSQS().type());
+                    dto.setEnvelopeResponseSQS(evento.envelopeResponseSQS());
+                    acionarCompensacao(dto);
                     String motivo = evento.payload() != null ? evento.payload().motivo() : "DESCONHECIDO";
                     logger.warn("SAGA [Falha]: Rejeitado por {}. Acionando compensação para a OS {}", motivo, osId);
                 }
                 case "ExecucaoCancelada" -> {
-                    acionarCompensacao(evento);
+                    CompensacaoDto dto = new CompensacaoDto(evento.envelopeResponseSQS().osId(), evento.envelopeResponseSQS().type());
+                    dto.setEnvelopeResponseSQS(evento.envelopeResponseSQS());
+                    acionarCompensacao(dto);
                     logger.info("Compensação efetivada: OS {} cancelada e estoque devolvido.", osId);
                 }
+
+                case "CancelamentoExecucaoRecusado" -> {
+                    ordemService.atualizarStatusSaga(Long.parseLong(evento.envelopeResponseSQS().osId()), StatusSaga.FALHA_COMPENSACAO);
+                    logger.info("Compensação não realizada: OS {} motivo: ", evento.payload().motivo());
+                }
+
                 default -> logger.warn("Evento desconhecido recebido: {}", tipoEvento);
             }
         } catch (Exception e) {
@@ -84,7 +89,6 @@ public class OrdemDeServicoSagaOrchestrator {
                             (BillingResponse.OrcamentoResponseDto) evento;
                     AvancarStatusDTO dto = AvancarStatusDTO.builder()
                             .novoStatus(StatusOS.AGUARDANDO_APROVACAO)
-                            .observacoes("Orçamento criado com sucesso.")
                             .total(orcamento.total())
                             .orcamentoId(orcamento.id())
                             .build();
@@ -98,7 +102,8 @@ public class OrdemDeServicoSagaOrchestrator {
                 }
 
                 case StatusBilling.FALHA -> {
-                /// VALIDAR ESTORNO
+                    final String type = "EstornarPagamento";
+                    this.acionarCompensacao(new CompensacaoDto(evento.ordemId().toString(), type));
                 }
 
                 default -> logger.warn("Evento desconhecido recebido do serviço de pagamentos");
@@ -112,37 +117,36 @@ public class OrdemDeServicoSagaOrchestrator {
 
     }
 
+    @Transactional()
+    public void acionarCompensacao(CompensacaoDto compensacaoDto) {
+        OrdemDeServico ordem = ordemService.buscarEntidade(Long.parseLong(compensacaoDto.getOsId()));
 
-    private void acionarCompensacao(ExecucaoResultadoEventDto evento) {
-        String osId = evento.envelopeResponseSQS().osId();
-        String sagaId = evento.envelopeResponseSQS().sagaId();
-        String causationId = evento.envelopeResponseSQS().causationId();
-        sqsExecucaoService.enviarComandoCancelamento(osId, sagaId, causationId);
+        final String causationId = "evento-cancelar-os-" + ordem.getId();
 
-        // Lógica de Rollback:
-        // 1. Chamar o serviço de Billing para solicitar o estorno do pagamento (pagamentoId).
-        /// pendente
+        CancelarOsDto dto = new CancelarOsDto(ordem, compensacaoDto.getType(), causationId);
 
-        // 2. Atualizar o status da OS no banco de dados para FALHA_SAGA ou CANCELADA.
-        AvancarStatusDTO dto = AvancarStatusDTO.builder()
-                .novoStatus(StatusOS.CANCELADA)
-                .observacoes(evento.payload().motivo())
-                .build();
+        StatusOS statusOS = ordem.getStatus();
 
-        ordemService.avancarStatus(Long.getLong(osId), dto);
-        salvarHistorico(evento.envelopeResponseSQS());
+        if (statusOS.equals(StatusOS.APROVADA) || statusOS.equals(StatusOS.EM_EXECUCAO))
+            this.estornoPagamento(dto);
+
+        else
+            throw new BusinessException("Não é possível cancelar a OS no status atual: " + statusOS);
+
     }
 
-    private void salvarHistorico(EnvelopeResponseSQS envelopeSqs) {
-        SagaHistorico historico = new SagaHistorico();
-        historico.setSagaId(envelopeSqs.sagaId());
-        historico.setOsId(envelopeSqs.osId());
-        historico.setMessageId(envelopeSqs.messageId());
-        historico.setType(envelopeSqs.type());
-        historico.setOperationId(envelopeSqs.operationId());
-        historico.setOccurredAt(Instant.now());
+    private void estornoPagamento(CancelarOsDto dto) {
+        sqsBillingService.enviarComandoProcessarPagamento(dto);
+        this.cancelarOS(dto);
+    }
 
-        sagaHistoricoRepository.save(historico);
+    private void cancelarOS(CancelarOsDto dto) {
+        ordemService.avancarStatus(
+                dto.getOrdemDeServico().getId(),
+                AvancarStatusDTO.builder()
+                        .novoStatus(StatusOS.CANCELADA)
+                        .statusSaga(StatusSaga.COMPENSADA)
+                        .build());
     }
 
 }

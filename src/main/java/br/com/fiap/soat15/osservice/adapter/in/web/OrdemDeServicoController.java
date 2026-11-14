@@ -25,7 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Ordens de Serviço", description = "Gestão do ciclo de vida das ordens de serviço")
 @Validated
-public class OrdemDeServicoController {
+public class OrdemDeServicoController{
 
     private final OrdemDeServicoService ordemService;
     private final SagaHistoricoRepository historicoRepository;
@@ -75,6 +75,12 @@ public class OrdemDeServicoController {
         return ResponseEntity.ok(ordemService.finalizarOsEntregue(id));
     }
 
+    @PostMapping("/{id}/cancelar-os")
+    @Operation(summary = "Solicita o cancelamento da OS a partir do status atual")
+    public void cancelarOs(@PathVariable Long id) {
+        ordemService.cancelarOrdem(id);
+    }
+
     @GetMapping
     @Operation(summary = "Listar todas as ordens de serviço")
     public ResponseEntity<List<OrdemDeServicoDTO>> listarOrdens() {
@@ -101,19 +107,6 @@ public class OrdemDeServicoController {
         return ResponseEntity.ok(ordemService.listarOrdensPorCliente(clienteId));
     }
 
-//    @PatchMapping("/{id}/status")
-//    @Operation(summary = "Avançar status da ordem de serviço")
-//    @ApiResponses({
-//            @ApiResponse(responseCode = "200", description = "Status atualizado com sucesso"),
-//            @ApiResponse(responseCode = "400", description = "Transição de status inválida"),
-//            @ApiResponse(responseCode = "404", description = "OS não encontrada")
-//    })
-//    public ResponseEntity<OrdemDeServicoDTO> avancarStatus(
-//            @PathVariable Long id,
-//            @Valid @RequestBody AvancarStatusDTO dto) {
-//        return ResponseEntity.ok(ordemService.avancarStatus(id, dto));
-//    }
-
     @PostMapping("/{id}/itens")
     @Operation(summary = "Adicionar um ou mais serviços à ordem de serviço")
     @ApiResponses({
@@ -136,7 +129,7 @@ public class OrdemDeServicoController {
     })
     public ResponseEntity<OrdemDeServicoDTO> removerItem(
             @PathVariable Long id,
-            @PathVariable Long itemId) {
+            @PathVariable String itemId) {
         return ResponseEntity.ok(ordemService.removerItem(id, itemId));
     }
 

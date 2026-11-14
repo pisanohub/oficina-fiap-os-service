@@ -3,8 +3,8 @@ package br.com.fiap.soat15.osservice.application.usecase;
 import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.BillingDto;
 import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.ItemOSRepository;
 import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.OrdemDeServicoRepository;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.CancelarOsDto;
 import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsBillingService;
-import br.com.fiap.soat15.osservice.application.dto.ItemOSDTO;
 import br.com.fiap.soat15.osservice.domain.entity.*;
 import br.com.fiap.soat15.osservice.domain.service.OrcamentoService;
 import lombok.AllArgsConstructor;
@@ -12,7 +12,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +28,7 @@ public class OrcamentoImpl implements OrcamentoService {
     private final SqsBillingService sqsProducer;
 
     @Override
+    @Transactional()
     public void solicitarOrcamento(OrdemDeServico ordem, Long clienteId) {
 
         List<ItemOS> itemOSList = itemOSRepository.buscarPorOrdemComServico(ordem);
@@ -57,7 +57,7 @@ public class OrcamentoImpl implements OrcamentoService {
                 .collect(toList());
 
         // 4. Monta o comando de requisição para o Billing[cite: 3]
-        String comandoId = UUID.randomUUID().toString();
+        String comandoId = UUIDv5.gerarUuidV5PorId(ordem.getId()).toString();
         BillingDto.GerarOrcamentoRequest billingRequest = new BillingDto.GerarOrcamentoRequest(
                 UUID.randomUUID().toString(),
                 sagaId,
@@ -70,25 +70,23 @@ public class OrcamentoImpl implements OrcamentoService {
 
         ordem.setSagaId(sagaId);
         ordem.setStatusSaga(StatusSaga.ENVIADO_PARA_ORCAMENTO);
-        OrdemDeServico os = osRepository.save(ordem);
+        osRepository.save(ordem);
 
         sqsProducer.enviarComandoGerarOrcamento(billingRequest);
 
     }
 
     @Override
+    @Transactional()
     public void processarPagamento(OrdemDeServico ordem, Long clienteId){
 
-        BillingDto.ProcessarPagamentoRequest pagamentoRequest = new BillingDto.ProcessarPagamentoRequest(
-                UUID.randomUUID().toString(),
-                ordem.getSagaId(),
-                "processar-pagamento-os-" + ordem.getId(),
-                UUID.randomUUID().toString(),
-                ordem.getId(),
-                clienteId
+        CancelarOsDto dto = new CancelarOsDto(
+                ordem,
+                "ProcessarPagamento",
+                "processar-pagamento-os-" + ordem.getId()
         );
 
-        sqsProducer.enviarComandoProcessarPagamento(pagamentoRequest);
+        sqsProducer.enviarComandoProcessarPagamento(dto);
 
         ordem.setStatusSaga(StatusSaga.ENVIADO_PARA_PAGAMENTO);
         osRepository.save(ordem);

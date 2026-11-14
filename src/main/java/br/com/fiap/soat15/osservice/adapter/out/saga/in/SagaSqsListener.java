@@ -115,7 +115,7 @@ public class SagaSqsListener {
                 .sagaId(envelope.sagaId())
                 .osId(envelope.osId())
                 .causationId(envelope.causationId())
-                .occurredAt(envelope.occurredAt())
+                .occurredAt(Instant.now())
                 .build();
 
         sagaRepository.save(sagaHistorico);
