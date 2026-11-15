@@ -481,7 +481,10 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
             return;
         }
 
-        long duracaoMinutos = Duration.between(ordem.getDataInicioExecucao(), LocalDateTime.now()).toMinutes();
+        long duracaoMinutos = Duration.between(
+                ordem.getDataInicioExecucao().atZone(ZoneId.systemDefault()).toInstant(),
+                Instant.now()
+        ).toMinutes();
         if (duracaoMinutos <= 0) {
             return;
         }
@@ -504,7 +507,10 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
 
     private void registrarTempoNoStatusAnterior(OrdemDeServico ordem, StatusOS statusAtual, LocalDateTime momentoTransicao) {
         LocalDateTime inicioStatus = ofNullable(ordem.getDataUltimaMudancaStatus()).orElse(ordem.getDataAbertura());
-        Duration tempoNoStatus = Duration.between(inicioStatus, momentoTransicao);
+        Duration tempoNoStatus = Duration.between(
+                inicioStatus.atZone(ZoneId.systemDefault()).toInstant(),
+                momentoTransicao.atZone(ZoneId.systemDefault()).toInstant()
+        );
         if (tempoNoStatus.isZero() || tempoNoStatus.isNegative()) {
             return;
         }
@@ -520,7 +526,10 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
             return;
         }
 
-        Duration duracaoExecucao = Duration.between(ordem.getDataInicioExecucao(), momentoFinalizacao);
+        Duration duracaoExecucao = Duration.between(
+                ordem.getDataInicioExecucao().atZone(ZoneId.systemDefault()).toInstant(),
+                momentoFinalizacao.atZone(ZoneId.systemDefault()).toInstant()
+        );
         if (duracaoExecucao.isZero() || duracaoExecucao.isNegative()) {
             return;
         }
