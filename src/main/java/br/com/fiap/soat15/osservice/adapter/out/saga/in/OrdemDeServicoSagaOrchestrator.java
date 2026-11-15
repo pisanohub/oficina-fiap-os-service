@@ -138,13 +138,11 @@ public class OrdemDeServicoSagaOrchestrator {
 
     }
 
-    @Transactional
     private void estornoPagamento(CancelarOsDto dto) {
         sqsBillingService.enviarComandoProcessarPagamento(dto);
         this.cancelarOS(dto);
     }
 
-    @Transactional
     private void cancelarOS(CancelarOsDto dto) {
         ordemService.avancarStatus(
                 dto.getOrdemDeServico().getId(),
