@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+  cloud:
+    aws:
+      sqs:
+        endpoint: http://localhost:4566
+      region:
+        static: us-east-1
+      credentials:
+        access-key: test
+        secret-key: test
+
+jwt:
+  secret: test-secret-key-for-unit-tests-only-32chars
+  expiration: 86400000
+
+aws:
+  sqs:
+    create-queues: true
+    url:
+      in:
+        billing:
+          orcamento-respondido: orcamento-respondido
+          pagamento-confirmado: pagamento-confirmado
+        execucao: execucao-resultados
+      out:
+        billing:
+          gerar-orcamento: gerar-orcamento
+          processar-pagamento: processar-pagamento
+        execucao: execucao-comandos

@@ -13,6 +13,12 @@ import java.util.List;
 @Builder
 public class CriarOrdemDTO {
 
+    public CriarOrdemDTO(Long clienteId, Long veiculoId, String descricaoProblema) {
+        this.clienteId = clienteId;
+        this.veiculoId = veiculoId;
+        this.descricaoProblema = descricaoProblema;
+    }
+
     @NotNull(message = "clienteId é obrigatório")
     private Long clienteId;
 

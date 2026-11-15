@@ -42,5 +42,6 @@ public class ItemOS {
     private String idOrigemItem;
 
     @Column()
+    @Enumerated(EnumType.STRING)
     private TipoItem tipoItem;
 }
