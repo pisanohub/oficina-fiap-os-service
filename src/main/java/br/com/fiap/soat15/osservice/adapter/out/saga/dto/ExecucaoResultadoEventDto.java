@@ -6,9 +6,9 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 public record ExecucaoResultadoEventDto(
         @JsonUnwrapped
         EnvelopeResponseSQS envelopeResponseSQS,
-        PayloadResLinhaDto payload
+        PayloadResponseDto payload
 ) {
-    public record PayloadResLinhaDto(
+    public record PayloadResponseDto(
             String status,
             String iniciadaEm,
             String concluidaEm,

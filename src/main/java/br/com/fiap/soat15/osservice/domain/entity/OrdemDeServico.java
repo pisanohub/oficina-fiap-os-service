@@ -73,9 +73,4 @@ public class OrdemDeServico {
     @Enumerated(EnumType.STRING)
     @Column(name = "status_saga", nullable = false)
     private StatusSaga statusSaga;
-
-//    @OneToMany(mappedBy = "ordemDeServico", cascade = CascadeType.ALL, orphanRemoval = true)
-//    @OrderBy("dataHora ASC")
-//    @Builder.Default
-//    private List<OsHistoricoStatus> historico = new ArrayList<>();
 }

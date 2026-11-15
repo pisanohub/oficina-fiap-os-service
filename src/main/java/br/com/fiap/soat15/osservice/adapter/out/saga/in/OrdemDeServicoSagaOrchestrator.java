@@ -1,11 +1,15 @@
 package br.com.fiap.soat15.osservice.adapter.out.saga.in;
 
-import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.SagaHistoricoRepository;
-import br.com.fiap.soat15.osservice.adapter.out.saga.dto.*;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.BillingResponse;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.CancelarOsDto;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.CompensacaoDto;
+import br.com.fiap.soat15.osservice.adapter.out.saga.dto.ExecucaoResultadoEventDto;
 import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsBillingService;
-import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsExecucaoService;
 import br.com.fiap.soat15.osservice.application.dto.AvancarStatusDTO;
-import br.com.fiap.soat15.osservice.domain.entity.*;
+import br.com.fiap.soat15.osservice.domain.entity.OrdemDeServico;
+import br.com.fiap.soat15.osservice.domain.entity.StatusBilling;
+import br.com.fiap.soat15.osservice.domain.entity.StatusOS;
+import br.com.fiap.soat15.osservice.domain.entity.StatusSaga;
 import br.com.fiap.soat15.osservice.domain.exception.BusinessException;
 import br.com.fiap.soat15.osservice.domain.service.AgendaExecucaoService;
 import br.com.fiap.soat15.osservice.domain.service.OrdemDeServicoService;
@@ -14,8 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
 
 @RequiredArgsConstructor
 @Service
@@ -27,6 +29,7 @@ public class OrdemDeServicoSagaOrchestrator {
     private final SqsBillingService sqsBillingService;
     private final AgendaExecucaoService agendaExecucaoService;
 
+    @Transactional
     public void processarRespostaExecucao(ExecucaoResultadoEventDto evento) {
         try {
             String tipoEvento = evento.envelopeResponseSQS().type();
@@ -76,7 +79,7 @@ public class OrdemDeServicoSagaOrchestrator {
         }
     }
 
-
+    @Transactional
     public void processarRespostaBilling(BillingResponse.MessageDto evento) {
         try {
 
@@ -135,11 +138,13 @@ public class OrdemDeServicoSagaOrchestrator {
 
     }
 
+    @Transactional
     private void estornoPagamento(CancelarOsDto dto) {
         sqsBillingService.enviarComandoProcessarPagamento(dto);
         this.cancelarOS(dto);
     }
 
+    @Transactional
     private void cancelarOS(CancelarOsDto dto) {
         ordemService.avancarStatus(
                 dto.getOrdemDeServico().getId(),

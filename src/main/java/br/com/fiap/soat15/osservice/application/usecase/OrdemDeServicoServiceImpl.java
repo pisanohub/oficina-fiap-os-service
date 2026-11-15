@@ -24,10 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Year;
+import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -102,6 +99,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
     }
 
     @Override
+    @Transactional
     public void cancelarOrdem(Long id) {
 
         OrdemDeServico ordem = buscarEntidade(id);
@@ -123,7 +121,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
             this.atualizarStatusSaga(id, StatusSaga.CANCELAMENTO_EXECUCAO_PENDENTE);
         }
         else {
-            throw new BusinessException("Nào foi possível processar a solicitação.");
+            throw new BusinessException("Não foi possível processar a solicitação.");
         }
 
     }

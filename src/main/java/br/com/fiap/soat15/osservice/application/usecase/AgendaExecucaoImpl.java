@@ -9,6 +9,7 @@ import br.com.fiap.soat15.osservice.adapter.out.saga.dto.EnvelopeResponseSQS;
 import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsExecucaoService;
 import br.com.fiap.soat15.osservice.application.dto.AvancarStatusDTO;
 import br.com.fiap.soat15.osservice.domain.entity.*;
+import br.com.fiap.soat15.osservice.domain.exception.BusinessException;
 import br.com.fiap.soat15.osservice.domain.service.AgendaExecucaoService;
 import br.com.fiap.soat15.osservice.domain.service.OrdemDeServicoService;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,7 @@ public class AgendaExecucaoImpl implements AgendaExecucaoService {
         Long osId = pagamentoResponseDto.ordemId();
 
         if (!osRepository.existsByIdAndStatus(osId, StatusOS.APROVADA))
-            throw new BadCredentialsException("Não é possível solicitar execução para uma OS sem pagamento OS: " + osId);
+            throw new BusinessException("Não é possível solicitar execução para uma OS sem pagamento OS: " + osId);
 
         OrdemDeServico os = osService.avancarStatus(osId, AvancarStatusDTO.builder()
                 .novoStatus(StatusOS.EM_EXECUCAO)
