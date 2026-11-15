@@ -10,31 +10,13 @@ spring:
     show-sql: false
   flyway:
     enabled: false
+
   cloud:
     aws:
       sqs:
-        endpoint: http://localhost:4566
-      region:
-        static: us-east-1
-      credentials:
-        access-key: test
-        secret-key: test
+        enabled: false
 
 jwt:
   secret: test-secret-key-for-unit-tests-only-32chars
   expiration: 86400000
 
-aws:
-  sqs:
-    create-queues: true
-    url:
-      in:
-        billing:
-          orcamento-respondido: orcamento-respondido
-          pagamento-confirmado: pagamento-confirmado
-        execucao: execucao-resultados
-      out:
-        billing:
-          gerar-orcamento: gerar-orcamento
-          processar-pagamento: processar-pagamento
-        execucao: execucao-comandos

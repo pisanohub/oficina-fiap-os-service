@@ -8,7 +8,7 @@ services:
     environment:
       - SERVICES=sqs,dynamodb
       - AWS_DEFAULT_REGION=us-east-1
-      - LOCALSTACK_AUTH_TOKEN=ls-nUkuMope-8131-LugO-dEle-0731zUReda4e
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
     volumes:
       - "./localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"

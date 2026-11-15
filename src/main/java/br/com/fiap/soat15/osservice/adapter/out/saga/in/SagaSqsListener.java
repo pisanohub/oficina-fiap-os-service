@@ -7,11 +7,17 @@ import br.com.fiap.soat15.osservice.adapter.out.saga.dto.ExecucaoResultadoEventD
 import br.com.fiap.soat15.osservice.domain.entity.SagaHistorico;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.annotation.SqsListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
 @Service
+@ConditionalOnProperty(
+        name = "spring.cloud.aws.sqs.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class SagaSqsListener {
 
     private final ObjectMapper objectMapper;

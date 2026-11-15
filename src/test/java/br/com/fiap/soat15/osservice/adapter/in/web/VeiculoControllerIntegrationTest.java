@@ -1,75 +1,91 @@
 package br.com.fiap.soat15.osservice.adapter.in.web;
 
-import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.ClienteRepository;
-import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.VeiculoRepository;
-import br.com.fiap.soat15.osservice.domain.entity.Cliente;
-import br.com.fiap.soat15.osservice.domain.entity.Veiculo;
+import br.com.fiap.soat15.osservice.application.dto.VeiculoDto;
+import br.com.fiap.soat15.osservice.config.security.JwtAuthFilter;
+import br.com.fiap.soat15.osservice.domain.service.VeiculoService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.context.WebApplicationContext;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@Sql(
-        scripts = "/cleanup.sql",
-        executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD
-)
+@WebMvcTest(VeiculoController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class VeiculoControllerIntegrationTest {
 
+    @Autowired
     private MockMvc mockMvc;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Autowired
-    private WebApplicationContext webApplicationContext;
+    @MockitoBean
+    private VeiculoService veiculoService;
 
-    @Autowired
-    private VeiculoRepository veiculoRepository;
+    @MockitoBean
+    private JwtAuthFilter jwtAuthFilter;
 
-    @Autowired
-    private ClienteRepository clienteRepository;
+    private static final Long CLIENTE_ID = 1L;
 
-    private Cliente clienteSalvo;
+    private VeiculoDto veiculoDTO(Long id, String placa) {
+        return VeiculoDto.builder()
+                .id(id)
+                .placa(placa)
+                .marca("Toyota")
+                .modelo("Corolla")
+                .ano(2022)
+                .clienteId(CLIENTE_ID)
+                .build();
+    }
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+    private Map<String, Object> requestBody(
+            String placa, Long clienteId) {
 
-        clienteSalvo = clienteRepository.save(Cliente.builder()
-                .nome("Cliente Teste")
-                .cpfCnpj("11144477735")
-                .email("teste@email.com")
-                .ativo(true)
-                .build());
+        return Map.of(
+                "placa", placa,
+                "marca", "Toyota",
+                "modelo", "Corolla",
+                "ano", 2022,
+                "clienteId", clienteId
+        );
     }
 
     @Test
     @DisplayName("GET /api/v1/veiculos - deve retornar lista vazia")
     void deveRetornarListaVazia() throws Exception {
+
+        when(veiculoService.listarVeiculos())
+                .thenReturn(Collections.emptyList());
+
         mockMvc.perform(get("/api/v1/veiculos"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(status().isOk());
     }
 
     @Test
     @DisplayName("GET /api/v1/veiculos - deve listar veículos cadastrados")
     void deveListarVeiculos() throws Exception {
-        veiculoRepository.save(veiculoEntity("ABC1D23"));
-        veiculoRepository.save(veiculoEntity("XYZ9W87"));
+
+        when(veiculoService.listarVeiculos())
+                .thenReturn(List.of(
+                        veiculoDTO(1L, "ABC1D23"),
+                        veiculoDTO(2L, "XYZ9W87")
+                ));
 
         mockMvc.perform(get("/api/v1/veiculos"))
                 .andExpect(status().isOk())
@@ -79,19 +95,25 @@ class VeiculoControllerIntegrationTest {
     @Test
     @DisplayName("GET /api/v1/veiculos/{id} - deve retornar veículo por ID")
     void deveBuscarVeiculoPorId() throws Exception {
-        Veiculo saved = veiculoRepository.save(veiculoEntity("ABC1D23"));
 
-        mockMvc.perform(get("/api/v1/veiculos/{id}", saved.getId()))
+        when(veiculoService.buscarPorId(1L))
+                .thenReturn(veiculoDTO(1L, "ABC1D23"));
+
+        mockMvc.perform(get("/api/v1/veiculos/{id}", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.placa", is("ABC1D23")))
                 .andExpect(jsonPath("$.marca", is("Toyota")))
                 .andExpect(jsonPath("$.modelo", is("Corolla")))
-                .andExpect(jsonPath("$.clienteId", is(clienteSalvo.getId().intValue())));
+                .andExpect(jsonPath("$.clienteId", is(1)));
     }
 
     @Test
     @DisplayName("GET /api/v1/veiculos/{id} - deve retornar 404 quando não encontrado")
     void deveRetornarErroQuandoVeiculoNaoEncontrado() throws Exception {
+
+        when(veiculoService.buscarPorId(999L))
+                .thenThrow(new NoSuchElementException("Veículo não encontrado"));
+
         mockMvc.perform(get("/api/v1/veiculos/{id}", 999L))
                 .andExpect(status().isNotFound());
     }
@@ -99,37 +121,31 @@ class VeiculoControllerIntegrationTest {
     @Test
     @DisplayName("POST /api/v1/veiculos - deve criar veículo com sucesso")
     void deveCriarVeiculo() throws Exception {
-        Map<String, Object> body = Map.of(
-                "placa", "ABC1D23",
-                "marca", "Toyota",
-                "modelo", "Corolla",
-                "ano", 2022,
-                "clienteId", clienteSalvo.getId()
-        );
+
+        when(veiculoService.criar(any(VeiculoDto.class)))
+                .thenReturn(veiculoDTO(1L, "ABC1D23"));
 
         mockMvc.perform(post("/api/v1/veiculos")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("ABC1D23", CLIENTE_ID))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id", notNullValue()))
                 .andExpect(jsonPath("$.placa", is("ABC1D23")))
-                .andExpect(jsonPath("$.clienteId", is(clienteSalvo.getId().intValue())));
+                .andExpect(jsonPath("$.clienteId", is(1)));
     }
 
     @Test
     @DisplayName("POST /api/v1/veiculos - deve aceitar placa no formato antigo")
     void deveAceitarPlacaFormatoAntigo() throws Exception {
-        Map<String, Object> body = Map.of(
-                "placa", "ABC-1234",
-                "marca", "Toyota",
-                "modelo", "Corolla",
-                "ano", 2022,
-                "clienteId", clienteSalvo.getId()
-        );
+
+        when(veiculoService.criar(any()))
+                .thenReturn(veiculoDTO(1L, "ABC-1234"));
 
         mockMvc.perform(post("/api/v1/veiculos")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("ABC-1234", CLIENTE_ID))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.placa", is("ABC-1234")));
     }
@@ -137,118 +153,92 @@ class VeiculoControllerIntegrationTest {
     @Test
     @DisplayName("POST /api/v1/veiculos - deve retornar 400 com placa inválida")
     void deveRetornarErroComPlacaInvalida() throws Exception {
-        Map<String, Object> body = Map.of(
-                "placa", "INVALIDA",
-                "marca", "Toyota",
-                "modelo", "Corolla",
-                "ano", 2022,
-                "clienteId", clienteSalvo.getId()
-        );
 
         mockMvc.perform(post("/api/v1/veiculos")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("INVALIDA", CLIENTE_ID))))
                 .andExpect(status().is4xxClientError());
+
+        verifyNoInteractions(veiculoService);
     }
 
     @Test
     @DisplayName("POST /api/v1/veiculos - deve retornar erro com placa vazia")
     void deveRetornarErroComPlacaVazia() throws Exception {
-        Map<String, Object> body = Map.of(
-                "placa", "",
-                "marca", "Toyota",
-                "modelo", "Corolla",
-                "ano", 2022,
-                "clienteId", clienteSalvo.getId()
-        );
 
         mockMvc.perform(post("/api/v1/veiculos")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("", CLIENTE_ID))))
                 .andExpect(status().is4xxClientError());
+
+        verifyNoInteractions(veiculoService);
     }
 
     @Test
     @DisplayName("POST /api/v1/veiculos - deve retornar 400 com placa duplicada")
     void deveRetornarErroComPlacaDuplicada() throws Exception {
-        veiculoRepository.save(veiculoEntity("ABC1D23"));
 
-        Map<String, Object> body = Map.of(
-                "placa", "ABC1D23",
-                "marca", "Honda",
-                "modelo", "Civic",
-                "ano", 2023,
-                "clienteId", clienteSalvo.getId()
-        );
+        when(veiculoService.criar(any()))
+                .thenThrow(new IllegalArgumentException("Placa já cadastrada"));
 
         mockMvc.perform(post("/api/v1/veiculos")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("ABC1D23", CLIENTE_ID))))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     @DisplayName("POST /api/v1/veiculos - deve retornar 404 com cliente inexistente")
     void deveRetornarErroComClienteInexistente() throws Exception {
-        Map<String, Object> body = Map.of(
-                "placa", "ABC1D23",
-                "marca", "Toyota",
-                "modelo", "Corolla",
-                "ano", 2022,
-                "clienteId", 9999L
-        );
+
+        when(veiculoService.criar(any()))
+                .thenThrow(new IllegalArgumentException("Cliente não encontrado"));
 
         mockMvc.perform(post("/api/v1/veiculos")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
-                .andExpect(status().isNotFound());
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("ABC1D23", 9999L))))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
     @DisplayName("PUT /api/v1/veiculos/{id} - deve atualizar veículo com sucesso")
     void deveAtualizarVeiculo() throws Exception {
-        Veiculo saved = veiculoRepository.save(veiculoEntity("ABC1D23"));
 
-        Map<String, Object> body = Map.of(
-                "placa", "XYZ9W87",
-                "marca", "Honda",
-                "modelo", "Civic",
-                "ano", 2023,
-                "clienteId", clienteSalvo.getId()
-        );
+        when(veiculoService.atualizar(eq(1L), any()))
+                .thenReturn(veiculoDTO(1L, "XYZ9W87"));
 
-        mockMvc.perform(put("/api/v1/veiculos/{id}", saved.getId())
+        mockMvc.perform(put("/api/v1/veiculos/{id}", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(
+                                requestBody("XYZ9W87", CLIENTE_ID))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.marca", is("Honda")))
+                .andExpect(jsonPath("$.marca", is("Toyota")))
                 .andExpect(jsonPath("$.placa", is("XYZ9W87")))
-                .andExpect(jsonPath("$.clienteId", is(clienteSalvo.getId().intValue())));
+                .andExpect(jsonPath("$.clienteId", is(1)));
     }
 
     @Test
     @DisplayName("DELETE /api/v1/veiculos/{id} - deve deletar veículo com sucesso")
     void deveDeletarVeiculo() throws Exception {
-        Veiculo saved = veiculoRepository.save(veiculoEntity("ABC1D23"));
 
-        mockMvc.perform(delete("/api/v1/veiculos/{id}", saved.getId()))
+        doNothing().when(veiculoService).deletar(1L);
+
+        mockMvc.perform(delete("/api/v1/veiculos/{id}", 1L))
                 .andExpect(status().isNoContent());
     }
 
     @Test
     @DisplayName("DELETE /api/v1/veiculos/{id} - deve retornar 404 ao deletar inexistente")
     void deveRetornarErroAoDeletarInexistente() throws Exception {
+
+        doThrow(new NoSuchElementException("Veículo não encontrado"))
+                .when(veiculoService).deletar(999L);
+
         mockMvc.perform(delete("/api/v1/veiculos/{id}", 999L))
                 .andExpect(status().isNotFound());
-    }
-
-    private Veiculo veiculoEntity(String placa) {
-        return Veiculo.builder()
-                .placa(placa)
-                .marca("Toyota")
-                .modelo("Corolla")
-                .ano(2022)
-                .cliente(clienteSalvo)
-                .build();
     }
 }

@@ -36,8 +36,8 @@ spring:
     show-sql: false
     open-in-view: false
 
-server:
-  port: 9090
+#server:
+#  port: 9090
 
 aws:
   sqs:
@@ -55,7 +55,7 @@ aws:
         execucao: execucao-comandos
 
 jwt:
-  secret: ${JWT_SECRET:sua-chave-secreta-com-minimo-32-caracteres}
+  secret: ${JWT_SECRET}
   expiration: 86400000 # 24h em ms
 
 management:
