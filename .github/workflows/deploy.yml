@@ -73,6 +73,9 @@ jobs:
             --from-literal=OTEL_SERVICE_NAME="os-service" \
             --from-literal=DEPLOYMENT_ENVIRONMENT="production" \
             --from-literal=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="https://otlp.nr-data.net/v1/traces" \
+            --from-literal=AWS_SQS_ENPOINT="https://sqs.us-east-1.amazonaws.com" \
+            --from-literal=AWS_ACCESS_KEY="" \
+            --from-literal=AWS_SECRET_KEY="" \
             --namespace=${{ env.NAMESPACE }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
