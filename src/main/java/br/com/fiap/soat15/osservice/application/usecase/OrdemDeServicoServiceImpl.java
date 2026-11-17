@@ -583,6 +583,8 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .valorTotal(ordem.getValorTotal())
                 .itens(itensDTO)
                 .sagaId(ordem.getSagaId())
+                .orcamentoId(ordem.getOrcamentoId())
+                .pagamentoId(ordem.getPagamentoId())
                 .build();
     }
 

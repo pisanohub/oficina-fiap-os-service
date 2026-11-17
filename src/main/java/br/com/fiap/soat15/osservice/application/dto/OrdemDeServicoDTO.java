@@ -31,4 +31,6 @@ public class OrdemDeServicoDTO {
     private BigDecimal valorTotal;
     private List<ItemOSDTO> itens;
     private String sagaId;
+    private String orcamentoId;
+    private String pagamentoId;
 }
