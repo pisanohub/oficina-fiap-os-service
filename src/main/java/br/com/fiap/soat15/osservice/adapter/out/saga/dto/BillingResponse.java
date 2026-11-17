@@ -1,6 +1,7 @@
 package br.com.fiap.soat15.osservice.adapter.out.saga.dto;
 
 import br.com.fiap.soat15.osservice.domain.entity.StatusBilling;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,6 +18,7 @@ public class BillingResponse {
         Long clienteId();
         StatusBilling status();
     }
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record OrcamentoResponseDto(
             String id,
             String messageId,
@@ -40,6 +42,7 @@ public class BillingResponse {
             BigDecimal valorUnitario
     ) {}
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record PagamentoResponseDto(
             String id,
             String messageId,
