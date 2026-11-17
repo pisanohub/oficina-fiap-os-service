@@ -61,7 +61,7 @@ public class OrcamentoImpl implements OrcamentoService {
         BillingDto.GerarOrcamentoRequest billingRequest = new BillingDto.GerarOrcamentoRequest(
                 UUID.randomUUID().toString(),
                 sagaId,
-                "gerar-orcamento-os-" + ordem.getId(),
+                UUID.randomUUID().toString(),
                 comandoId,
                 ordem.getId(),
                 clienteId,

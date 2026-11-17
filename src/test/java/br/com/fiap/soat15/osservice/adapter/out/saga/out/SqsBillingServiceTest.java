@@ -227,7 +227,6 @@ class SqsBillingServiceTest {
         CancelarOsDto dto = mock(CancelarOsDto.class);
 
         when(dto.getOrdemDeServico()).thenReturn(ordem);
-        when(dto.getCausationId()).thenReturn("causation-1");
         when(dto.getType()).thenReturn("EstornarPagamento");
 
         return dto;

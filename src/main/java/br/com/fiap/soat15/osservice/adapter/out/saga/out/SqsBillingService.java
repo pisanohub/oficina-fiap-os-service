@@ -2,7 +2,6 @@ package br.com.fiap.soat15.osservice.adapter.out.saga.out;
 
 import br.com.fiap.soat15.osservice.adapter.out.gateway.dto.BillingDto;
 import br.com.fiap.soat15.osservice.adapter.out.saga.dto.CancelarOsDto;
-import br.com.fiap.soat15.osservice.application.usecase.UUIDv5;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -44,11 +43,14 @@ public class SqsBillingService {
             BillingDto.ProcessarPagamentoRequest comando = new BillingDto.ProcessarPagamentoRequest(
                     UUID.randomUUID().toString(),
                     dto.getOrdemDeServico().getSagaId(),
-                    dto.getCausationId(),
-                    UUIDv5.gerarUuidV5PorId(dto.getOrdemDeServico().getId()).toString(),
+                    UUID.randomUUID().toString(),
+                    UUID.randomUUID().toString(),
                     dto.getOrdemDeServico().getId(),
                     dto.getOrdemDeServico().getVeiculo().getCliente().getId(),
-                    dto.getType()
+                    dto.getType(),
+                    dto.getOrdemDeServico().getOrcamentoId(),
+                    1,
+                    dto.getOrdemDeServico().getPagamentoId()
             );
 
             String jsonPayload = objectMapper.writeValueAsString(comando);

@@ -33,7 +33,10 @@ public class BillingDto {
             String comandoId,
             Long ordemId,
             Long clienteId,
-            String type
+            String type,
+            String orcamentoId,
+            int versao,
+            String pagamentoId
     ) {}
 
 }
