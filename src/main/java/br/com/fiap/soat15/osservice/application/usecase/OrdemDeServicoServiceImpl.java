@@ -343,6 +343,9 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         if (dto.getPagamentoId() != null)
             ordem.setPagamentoId(dto.getPagamentoId());
 
+        if (dto.getMotivoCancelamento() != null)
+            ordem.setMotivoCancelamento(dto.getMotivoCancelamento());
+
         return ordemRepository.save(ordem);
     }
 
@@ -585,6 +588,7 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
                 .sagaId(ordem.getSagaId())
                 .orcamentoId(ordem.getOrcamentoId())
                 .pagamentoId(ordem.getPagamentoId())
+                .motivoCancelamento(ordem.getMotivoCancelamento())
                 .build();
     }
 

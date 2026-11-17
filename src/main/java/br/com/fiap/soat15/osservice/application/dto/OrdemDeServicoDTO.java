@@ -33,4 +33,5 @@ public class OrdemDeServicoDTO {
     private String sagaId;
     private String orcamentoId;
     private String pagamentoId;
+    private String motivoCancelamento;
 }

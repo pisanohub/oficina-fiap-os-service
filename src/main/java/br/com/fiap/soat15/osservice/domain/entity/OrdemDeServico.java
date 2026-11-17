@@ -67,6 +67,9 @@ public class OrdemDeServico {
     @Column()
     private String pagamentoId;
 
+    @Column(columnDefinition = "TEXT")
+    private String motivoCancelamento;
+
     @Version
     private Long version;
 
