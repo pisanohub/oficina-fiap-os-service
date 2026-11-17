@@ -273,8 +273,8 @@ public class OrdemDeServicoServiceImpl implements OrdemDeServicoService {
         if (nonNull(ordens) && !ordens.isEmpty()) {
             BigDecimal timeExecutions = BigDecimal.valueOf(ordens.stream()
                     .mapToLong(o -> Duration.between(
-                            o.getDataInicioExecucao(),
-                            o.getDataFechamento()
+                            o.getDataInicioExecucao().atZone(ZoneId.systemDefault()).toInstant(),
+                            o.getDataFechamento().atZone(ZoneId.systemDefault()).toInstant()
                     ).toHours())
                     .sum());
 
