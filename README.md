@@ -101,3 +101,5 @@ O CI (`.github/workflows/ci.yml`) roda build, testes e Sonar. O CD (`.github/wor
 - **Secret:** usuário e senha do banco e o `JWT_SECRET`.
 
 O container escuta na porta 9090, e o Service `os-service` a expõe como 8080 dentro do cluster.
+
+Video de demonstração da Fase 4 gravado em 17/11/2026.
