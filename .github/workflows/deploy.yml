@@ -76,6 +76,7 @@ jobs:
             --from-literal=AWS_SQS_ENPOINT="https://sqs.us-east-1.amazonaws.com" \
             --from-literal=AWS_ACCESS_KEY="" \
             --from-literal=AWS_SECRET_KEY="" \
+            --from-literal=OPEN_FEIGN_EXECUCAO_URL="http://execucao-service:8080" \
             --namespace=${{ env.NAMESPACE }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
