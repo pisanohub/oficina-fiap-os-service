@@ -21,4 +21,5 @@ public class CompensacaoDto {
     @NotNull
     private String type;
     private EnvelopeResponseSQS envelopeResponseSQS;
+    private String motivo;
 }

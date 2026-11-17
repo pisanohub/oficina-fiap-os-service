@@ -17,4 +17,5 @@ public class CancelarOsDto {
     private OrdemDeServico ordemDeServico;
     private String type;
     private String causationId;
+    private String motivo;
 }

@@ -30,4 +30,6 @@ public class AvancarStatusDTO {
     private String pagamentoId;
 
     private String orcamentoId;
+
+    private String motivoCancelamento;
 }

@@ -83,7 +83,8 @@ public class OrcamentoImpl implements OrcamentoService {
         CancelarOsDto dto = new CancelarOsDto(
                 ordem,
                 "ProcessarPagamento",
-                "processar-pagamento-os-" + ordem.getId()
+                "processar-pagamento-os-" + ordem.getId(),
+                null
         );
 
         sqsProducer.enviarComandoProcessarPagamento(dto);

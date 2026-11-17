@@ -53,10 +53,11 @@ public class OrdemDeServicoSagaOrchestrator {
                     logger.info("Trabalho concluído com sucesso na OS {}", osId);
                 }
                 case "ExecucaoRejeitada" -> {
+                    String motivo = evento.payload() != null ? evento.payload().motivo() : "DESCONHECIDO";
                     CompensacaoDto dto = new CompensacaoDto(evento.envelopeResponseSQS().osId(), evento.envelopeResponseSQS().type());
                     dto.setEnvelopeResponseSQS(evento.envelopeResponseSQS());
+                    dto.setMotivo(motivo);
                     acionarCompensacao(dto);
-                    String motivo = evento.payload() != null ? evento.payload().motivo() : "DESCONHECIDO";
                     logger.warn("SAGA [Falha]: Rejeitado por {}. Acionando compensação para a OS {}", motivo, osId);
                 }
                 case "ExecucaoCancelada" -> {
@@ -126,7 +127,7 @@ public class OrdemDeServicoSagaOrchestrator {
 
         final String causationId = "evento-cancelar-os-" + ordem.getId();
 
-        CancelarOsDto dto = new CancelarOsDto(ordem, compensacaoDto.getType(), causationId);
+        CancelarOsDto dto = new CancelarOsDto(ordem, compensacaoDto.getType(), causationId, compensacaoDto.getMotivo());
 
         StatusOS statusOS = ordem.getStatus();
 
@@ -149,6 +150,7 @@ public class OrdemDeServicoSagaOrchestrator {
                 AvancarStatusDTO.builder()
                         .novoStatus(StatusOS.CANCELADA)
                         .statusSaga(StatusSaga.COMPENSADA)
+                        .motivoCancelamento(dto.getMotivo())
                         .build());
     }
 

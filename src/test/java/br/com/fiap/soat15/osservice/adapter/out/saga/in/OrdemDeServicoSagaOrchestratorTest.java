@@ -125,6 +125,7 @@ class OrdemDeServicoSagaOrchestratorTest {
                 .isEqualTo(AvancarStatusDTO.builder()
                         .novoStatus(StatusOS.CANCELADA)
                         .statusSaga(StatusSaga.COMPENSADA)
+                        .motivoCancelamento("ESTOQUE_INSUFICIENTE")
                         .build());
     }
 
