@@ -5,7 +5,6 @@ import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.OrdemDeSe
 import br.com.fiap.soat15.osservice.adapter.out.persistence.repository.SagaHistoricoRepository;
 import br.com.fiap.soat15.osservice.adapter.out.saga.dto.AgendarExecucaoCommandDto;
 import br.com.fiap.soat15.osservice.adapter.out.saga.dto.BillingResponse;
-import br.com.fiap.soat15.osservice.adapter.out.saga.dto.EnvelopeResponseSQS;
 import br.com.fiap.soat15.osservice.adapter.out.saga.out.SqsExecucaoService;
 import br.com.fiap.soat15.osservice.application.dto.AvancarStatusDTO;
 import br.com.fiap.soat15.osservice.domain.entity.*;
@@ -49,16 +48,14 @@ public class AgendaExecucaoImpl implements AgendaExecucaoService {
                 .build());
 
         AgendarExecucaoCommandDto comando = new AgendarExecucaoCommandDto(
-                new EnvelopeResponseSQS(
-                        1, // schemaVersion
-                        UUID.randomUUID().toString(), // messageId único para a mensagem
-                        "agendar-os-" + osId + "-pagamento-" + pagamentoResponseDto.pagamentoId(), // operationId único para deduplicação
-                        "AgendarExecucao", // type obrigatório
-                        os.getSagaId(),
-                        osId.toString(),
-                        pagamentoResponseDto.pagamentoId(), // causationId amarrado ao pagamento
-                        Instant.now()
-                ),
+                1, // schemaVersion
+                UUID.randomUUID().toString(), // messageId único para a mensagem
+                "agendar-os-" + osId + "-pagamento-" + pagamentoResponseDto.pagamentoId(), // operationId único para deduplicação
+                "AgendarExecucao", // type obrigatório
+                os.getSagaId(),
+                osId.toString(),
+                pagamentoResponseDto.pagamentoId(), // causationId amarrado ao pagamento
+                Instant.now(),
                 new AgendarExecucaoCommandDto.PayloadDto(
                         pagamentoResponseDto.orcamentoId(),
                         pagamentoResponseDto.versao(), // versao do orçamento
@@ -68,7 +65,7 @@ public class AgendaExecucaoImpl implements AgendaExecucaoService {
         );
 
         sqsProducer.enviarComandoAgendamento(comando);
-        salvarHistorico(comando.envelopeResponseSQS());
+        salvarHistorico(comando);
 
         System.out.println("Pagamento confirmado para a OS " + osId + ". Comando AgendarExecucao enviado ao SQS com sucesso!");
     }
@@ -105,13 +102,13 @@ public class AgendaExecucaoImpl implements AgendaExecucaoService {
         return list;
     }
 
-    private void salvarHistorico(EnvelopeResponseSQS envelopeSqs) {
+    private void salvarHistorico(AgendarExecucaoCommandDto comando) {
         SagaHistorico historico = new SagaHistorico();
-        historico.setSagaId(envelopeSqs.sagaId());
-        historico.setOsId(envelopeSqs.osId());
-        historico.setMessageId(envelopeSqs.messageId());
-        historico.setType(envelopeSqs.type());
-        historico.setOperationId(envelopeSqs.operationId());
+        historico.setSagaId(comando.sagaId());
+        historico.setOsId(comando.osId());
+        historico.setMessageId(comando.messageId());
+        historico.setType(comando.type());
+        historico.setOperationId(comando.operationId());
         historico.setOccurredAt(Instant.now());
 
         sagaHistoricoRepository.save(historico);
