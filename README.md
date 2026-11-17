@@ -1,71 +1,103 @@
 # OS Service
 
-Microsservico de Ordem de Servico da Oficina FIAP (Tech Challenge Fase 4).
+Microsserviço de Ordem de Serviço da Oficina FIAP (Tech Challenge Fase 4).
 
 ## Responsabilidade
 
-Gerencia o ciclo de vida da Ordem de Servico - abertura, atualizacao de status, consulta
-de status e historico. Tambem hospeda o orquestrador do Saga Pattern que coordena o fluxo
-entre os 3 microsservicos.
+Gerencia clientes, veículos e o ciclo de vida da ordem de serviço: abertura, itens (peças e serviços com o preço congelado), orçamento, aprovação, cancelamento, entrega, status e histórico. Também é o **orquestrador da Saga**, que coordena o Billing Service (orçamento e pagamento) e o Execução Service (execução do trabalho) por filas SQS.
+
+## Documentação
+
+- [Arquitetura do serviço](docs/arquitetura.md): lugar na solução, camadas, modelo de dados, status da OS, API e implantação.
+- [Saga orquestrada](docs/saga-orquestrada.md): por que orquestrada, filas, fluxo feliz, o que o orquestrador faz com cada resposta, compensações e idempotência.
+- [Diagrama geral da arquitetura da Fase 4](https://github.com/pisanohub/oficina-fiap-execucao-service/blob/main/docs/arquitetura-geral-fase4.md) e [ADRs do grupo](https://github.com/pisanohub/oficina-fiap-execucao-service/blob/main/docs/decisoes-fase4/README.md).
+- Swagger UI: `/swagger-ui.html` (com a aplicação no ar).
+
+## Arquitetura em resumo
+
+```mermaid
+flowchart LR
+    U[Cliente / operador] -->|HTTP + JWT| OS[OS Service]
+    OS -->|catálogo - HTTP| EX[Execução Service]
+    OS --> PG[(PostgreSQL os_service)]
+    OS <-->|gerar-orcamento, orcamento-respondido,<br/>processar-pagamento, pagamento-confirmado| BI[Billing Service]
+    OS <-->|execucao-comandos, execucao-resultados| EX
+```
+
+**Estratégia da Saga: orquestrada, dentro do OS Service (ADR-P4).**
+- O OS guarda o estado da Saga na própria OS (`StatusSaga`), envia os comandos e decide o próximo passo a cada evento.
+- As compensações cancelam a OS e, quando já houve pagamento, pedem o estorno ao Billing.
+- Se a execução já foi agendada, o OS primeiro pede o cancelamento ao Execução, que devolve as peças ao estoque.
+- Cada mensagem recebida é registrada pelo `messageId`, e as repetidas são ignoradas.
+
+Detalhes em [docs/saga-orquestrada.md](docs/saga-orquestrada.md).
 
 ## Tecnologias
 
-- Java 21
-- Spring Boot 4.0.5
-  - Spring Web, Data JPA, Validation, Actuator
-- PostgreSQL (driver JDBC) - RDS compartilhado com o Billing Service, database e usuario
-  proprios (ver ADR-P2)
-- AWS SDK v2
-  - SQS (comandos/eventos da Saga)
-- Resilience4j (Circuit Breaker nas chamadas sincronas)
+- Java 21 e Spring Boot 4.0.5 (Web, Data JPA, Validation, Security, Actuator)
+- PostgreSQL: database `os_service` no RDS compartilhado com o Billing, com usuário próprio (ADR-P2)
+- Spring Cloud AWS (listener SQS) e AWS SDK v2 (envio de comandos ao SQS)
+- Spring Cloud OpenFeign (catálogo do Execução Service)
+- JWT (jjwt) para autenticação
 - springdoc-openapi (Swagger UI)
-- Lombok
-- Maven + Maven Wrapper
-- JaCoCo (cobertura de testes)
+- OpenTelemetry, Micrometer e Prometheus
+- Lombok, Maven e Maven Wrapper
+- JaCoCo (cobertura) e SonarCloud (quality gate no CI)
 
 ## Como rodar localmente
 
-Pre-requisitos: Java 21 e um PostgreSQL acessivel (local ou via Docker).
+Pré-requisitos: Java 21, Docker e um PostgreSQL acessível (database `os_service`).
 
 ```bash
-./mvnw clean verify
+docker compose up -d
+```
+
+Isso sobe o LocalStack (porta 4566) e cria as seis filas da Saga (`init-aws.sh`). Depois:
+
+```bash
+export JWT_SECRET=um-segredo-local-com-pelo-menos-32-caracteres
 ./mvnw spring-boot:run
 ```
 
-No Windows (PowerShell/cmd):
+A API fica em `http://localhost:9090`. Para buscar o catálogo, o Execução Service precisa estar rodando em `OPEN_FEIGN_EXECUCAO_URL`.
 
+Para rodar os testes:
+
+```bash
+./mvnw clean verify
 ```
-mvnw.cmd clean verify
-mvnw.cmd spring-boot:run
-```
 
-Variaveis de ambiente configuraveis (ver `src/main/resources/application.yaml`):
+No Windows, use `mvnw.cmd` no lugar de `./mvnw`.
 
-| Variavel | Default | Descricao |
-|---|---|---|
+### Variáveis de ambiente
+
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/os_service` | URL JDBC do PostgreSQL |
-| `SPRING_DATASOURCE_USERNAME` | `postgres` | Usuario do banco |
+| `SPRING_DATASOURCE_USERNAME` | `postgres` | Usuário do banco |
 | `SPRING_DATASOURCE_PASSWORD` | `postgres` | Senha do banco |
-| `AWS_REGION` | `us-east-1` | Regiao AWS usada pelo cliente SQS |
+| `JWT_SECRET` | sem padrão (obrigatória) | Chave de assinatura dos tokens JWT |
+| `AWS_REGION` | `us-east-1` | Região do SQS |
+| `AWS_SQS_ENPOINT` | `http://localhost:4566` | Endpoint do SQS (LocalStack local; `https://sqs.us-east-1.amazonaws.com` no cluster) |
+| `AWS_ACCESS_KEY` / `AWS_SECRET_KEY` | `test` | Credenciais estáticas. Vazias, o serviço usa as credenciais da instância (LabRole) |
+| `OPEN_FEIGN_EXECUCAO_URL` | `http://localhost:8080` | Endereço do Execução Service para consultar o catálogo |
 
 Health check: `GET /actuator/health`.
 
-## Observacao importante
+## Qualidade
 
-Este repositorio e um **esqueleto inicial**, criado apenas para dar um ponto de partida
-(build funcionando, estrutura de pastas, Dockerfile e manifestos Kubernetes basicos,
-pipeline de CI simples). Nenhuma logica de dominio foi implementada ainda.
+| Medida (16/11/2026) | Valor |
+| --- | --- |
+| Testes automatizados | 285, todos passando |
+| Cobertura de linhas (JaCoCo) | 88,6% |
+| Análise no CI | SonarCloud com quality gate (`-Dsonar.qualitygate.wait=true`) |
 
-Quem assumir este servico deve seguir o planejamento completo em
-`documentacao/divisao-tarefas-fase4.md` e `documentacao/event-storming-saga-v1.md`, no
-repositorio principal do grupo, incluindo:
+O relatório de cobertura fica em `target/site/jacoco/index.html`.
 
-- Modelagem do dominio (Cliente, Veiculo, OrdemDeServico, StatusOS, hoje no monolito).
-- Implementacao do orquestrador da Saga: comandos `GerarOrcamento`, `ProcessarPagamento`
-  e `EnviarParaExecucao` via SQS; consumo dos eventos de resposta (`OrcamentoGerado`,
-  `PagamentoConfirmado`, `ExecucaoConcluida`) e das compensacoes de falha.
-- Definicao de onde mora o estado da Saga (campo na propria OS ou tabela dedicada - ver
-  hot spot no event storming).
-- Circuit Breaker nas chamadas sincronas (ex.: API Gateway -> OS Service).
-- Testes unitarios, cobertura minima de 80%, fluxo BDD.
-- Pipeline de deploy em Kubernetes (este CI ainda so faz build + testes).
+## Deploy
+
+O CI (`.github/workflows/ci.yml`) roda build, testes e Sonar. O CD (`.github/workflows/deploy.yml`) gera a imagem no GHCR e faz o deploy no K3s, no namespace `oficina-ms`:
+- **ConfigMap:** banco, endpoint do SQS e nome do serviço para o OpenTelemetry.
+- **Secret:** usuário e senha do banco e o `JWT_SECRET`.
+
+O container escuta na porta 9090, e o Service `os-service` a expõe como 8080 dentro do cluster.
